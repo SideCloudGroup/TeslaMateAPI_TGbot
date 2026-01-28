@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pplul/teslamateapi-tgbot/models"
 	"github.com/valyala/fasthttp"
+	"teslamate-bot/models"
 )
 
 // Client TeslaMate API客户端

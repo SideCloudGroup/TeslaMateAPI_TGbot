@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/pplul/teslamateapi-tgbot/client"
+	"teslamate-bot/client"
 )
 
 // Bot Telegram Bot结构

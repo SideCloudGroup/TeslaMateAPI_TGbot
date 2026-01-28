@@ -7,9 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/pplul/teslamateapi-tgbot/bot"
-	"github.com/pplul/teslamateapi-tgbot/client"
-	"github.com/pplul/teslamateapi-tgbot/config"
+	"teslamate-bot/bot"
+	"teslamate-bot/client"
+	"teslamate-bot/config"
 )
 
 var (

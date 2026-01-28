@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pplul/teslamateapi-tgbot/client"
+	"teslamate-bot/client"
 )
 
 // Handler 处理器结构
