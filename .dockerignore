@@ -1,0 +1,6 @@
+.github
+.gitignore
+config.example.toml
+docker-compose.yml
+README.md
+LICENSE

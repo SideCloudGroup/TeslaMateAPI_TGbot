@@ -1,0 +1,25 @@
+# Telegram Bot配置
+[telegram]
+# Bot Token
+bot_token = "YOUR_BOT_TOKEN_HERE"
+
+# 白名单会话ID列表
+whitelist_chat_ids = [123456789, 987654321]
+
+# 自定义Telegram API端点 (可选)
+# 如果未设置或留空，则使用官方API
+api_endpoint = ""
+
+# TeslaMate API配置
+[teslamate]
+# TeslaMate API的URL地址
+api_url = "http://localhost:8080"
+
+# API认证密钥 (Bearer Token)
+api_key = "YOUR_API_KEY_HERE"
+
+# 车辆ID (单车模式，只监控一辆车)
+car_id = 1
+
+# 请求超时时间（秒）
+timeout = 30
