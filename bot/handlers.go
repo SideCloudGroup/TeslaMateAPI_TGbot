@@ -33,6 +33,7 @@ func (h *Handler) HandleHelp() string {
 		"/status - 查看车辆当前状态\n" +
 		"/battery - 查看电池健康度\n" +
 		"/charge - 查看最新充电记录\n" +
+		"/drive - 查看最近一次驾驶信息\n" +
 		"/help - 显示帮助信息"
 }
 
@@ -225,6 +226,58 @@ func (h *Handler) HandleCharge() (string, error) {
 		charge.RangeRated.EndRange,
 		charge.Cost,
 		charge.OutsideTempAvg,
+	), nil
+}
+
+// HandleDrive 处理最近一次驾驶信息请求
+func (h *Handler) HandleDrive() (string, error) {
+	drive, units, err := h.client.GetLatestDrive()
+	if err != nil {
+		return "", err
+	}
+
+	startDate, startTime := splitDateTime(drive.StartDate)
+	endTime := extractTime(drive.EndDate)
+
+	return fmt.Sprintf(
+		"🚗 最近一次驾驶\n"+
+			"━━━━━━━━━━━━━━━━━━━━\n"+
+			"📅 日期: %s\n"+
+			"🕐 开始: %s\n"+
+			"🕐 结束: %s\n"+
+			"⏱️ 时长: %s\n"+
+			"📏 里程: %.2f %s\n"+
+			"📊 表显: %.2f → %.2f %s\n"+
+			"🔋 电量: %d%% → %d%%\n"+
+			"📏 续航: %.0f → %.0f %s\n"+
+			"⚡ 能耗: %.2f kWh (%.0f Wh/%s)\n"+
+			"🌡️ 车外/车内: %.1f°%s / %.1f°%s\n"+
+			"🚀 最高速度: %.0f %s/h | 平均: %.0f %s/h",
+		startDate,
+		startTime,
+		endTime,
+		drive.DurationStr,
+		drive.OdometerDetails.OdometerDistance,
+		units.UnitOfLength,
+		drive.OdometerDetails.OdometerStart,
+		drive.OdometerDetails.OdometerEnd,
+		units.UnitOfLength,
+		drive.BatteryDetails.StartBatteryLevel,
+		drive.BatteryDetails.EndBatteryLevel,
+		drive.RangeRated.StartRange,
+		drive.RangeRated.EndRange,
+		units.UnitOfLength,
+		drive.EnergyConsumedNet,
+		drive.ConsumptionNet,
+		units.UnitOfLength,
+		drive.OutsideTempAvg,
+		units.UnitOfTemperature,
+		drive.InsideTempAvg,
+		units.UnitOfTemperature,
+		drive.SpeedMax,
+		units.UnitOfLength,
+		drive.SpeedAvg,
+		units.UnitOfLength,
 	), nil
 }
 

@@ -22,10 +22,11 @@ type TelegramConfig struct {
 
 // TeslaMateConfig TeslaMate API配置
 type TeslaMateConfig struct {
-	APIURL  string `toml:"api_url"`
-	APIKey  string `toml:"api_key"`
-	CarID   int    `toml:"car_id"`
-	Timeout int    `toml:"timeout"`
+	APIURL  string            `toml:"api_url"`
+	APIKey  string            `toml:"api_key"`
+	CarID   int               `toml:"car_id"`
+	Timeout int               `toml:"timeout"`
+	Headers map[string]string `toml:"headers"` // 自定义请求头（可选）
 }
 
 // LoadConfig 从文件加载配置
@@ -63,9 +64,7 @@ func (c *Config) Validate() error {
 	if c.TeslaMate.APIURL == "" {
 		return fmt.Errorf("teslamate.api_url 不能为空")
 	}
-	if c.TeslaMate.APIKey == "" {
-		return fmt.Errorf("teslamate.api_key 不能为空")
-	}
+	// api_key 可选
 	if c.TeslaMate.CarID <= 0 {
 		return fmt.Errorf("teslamate.car_id 必须大于0")
 	}

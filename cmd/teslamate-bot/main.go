@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 
 	"teslamate-bot/bot"
 	"teslamate-bot/client"
@@ -22,7 +21,7 @@ func main() {
 
 	// 定义命令行参数
 	var (
-		configPath  = flag.String("config", "", "配置文件路径 (默认: ./config.toml)")
+		configPath  = flag.String("config", "config.toml", "配置文件路径（默认: 当前目录 config.toml）")
 		showVersion = flag.Bool("version", false, "显示版本信息")
 		showHelp    = flag.Bool("help", false, "显示帮助信息")
 	)
@@ -58,17 +57,6 @@ func main() {
 		os.Exit(0)
 	}
 
-	// 确定配置文件路径
-	if *configPath == "" {
-		// 获取可执行文件所在目录
-		exePath, err := os.Executable()
-		if err != nil {
-			log.Fatalf("获取可执行文件路径失败: %v", err)
-		}
-		exeDir := filepath.Dir(exePath)
-		*configPath = filepath.Join(exeDir, "config.toml")
-	}
-
 	log.Printf("正在加载配置文件: %s", *configPath)
 	cfg, err := config.LoadConfig(*configPath)
 	if err != nil {
@@ -83,6 +71,7 @@ func main() {
 		cfg.TeslaMate.APIKey,
 		cfg.TeslaMate.CarID,
 		cfg.TeslaMate.Timeout,
+		cfg.TeslaMate.Headers,
 	)
 	log.Printf("TeslaMate API客户端初始化完成 (CarID: %d)", cfg.TeslaMate.CarID)
 

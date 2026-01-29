@@ -12,6 +12,27 @@
 - 🔄 **一键刷新** - 所有信息页面支持实时刷新
 - 📱 **双重交互** - 支持命令和内联键盘两种操作方式
 
+## 部署
+
+### Docker (推荐)
+
+#### 使用 Docker Compose (推荐)
+
+1. 下载 `docker-compose.yml` 和 `config.example.toml`：
+
+```bash
+wget https://github.com/SideCloudGroup/TeslaMateAPI_TGbot/raw/refs/heads/main/docker-compose.yml
+wget https://github.com/SideCloudGroup/TeslaMateAPI_TGbot/raw/refs/heads/main/config.example.toml -O config.toml
+```
+
+2. 编辑 `config.toml` 文件
+
+3. 使用 Docker Compose 运行：
+
+```bash
+docker compose up -d
+```
+
 ## 许可证
 
 MIT License

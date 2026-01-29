@@ -15,6 +15,9 @@ func GetMainMenu() tgbotapi.InlineKeyboardMarkup {
 			tgbotapi.NewInlineKeyboardButtonData("🔋 电池健康", "battery"),
 			tgbotapi.NewInlineKeyboardButtonData("🔌 最新充电", "charge"),
 		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🚗 最近驾驶", "drive"),
+		),
 	)
 }
 

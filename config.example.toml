@@ -23,3 +23,9 @@ car_id = 1
 
 # 请求超时时间（秒）
 timeout = 30
+
+# 自定义请求头（可选）
+# 用于支持Cloudflare Access Token等场景
+# [teslamate.headers]
+# CF-Access-Client-Id = "your-client-id"
+# CF-Access-Client-Secret = "your-client-secret"

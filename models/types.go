@@ -270,3 +270,65 @@ type Units struct {
 	UnitOfTemperature string `json:"unit_of_temperature"`
 	UnitOfPressure    string `json:"unit_of_pressure,omitempty"`
 }
+
+// DrivesResponse 驾驶记录响应
+type DrivesResponse struct {
+	Data struct {
+		Car    DrivesCar `json:"car"`
+		Drives []Drive   `json:"drives"`
+		Units  Units     `json:"units"`
+	} `json:"data"`
+}
+
+// DrivesCar 驾驶列表中的车辆信息
+type DrivesCar struct {
+	CarID   int    `json:"car_id"`
+	CarName string `json:"car_name"`
+}
+
+// Drive 驾驶记录
+type Drive struct {
+	DriveID           int                  `json:"drive_id"`
+	StartDate         string               `json:"start_date"`
+	EndDate           string               `json:"end_date"`
+	StartAddress      string               `json:"start_address"`
+	EndAddress        string               `json:"end_address"`
+	OdometerDetails   DriveOdometerDetails `json:"odometer_details"`
+	DurationMin       int                  `json:"duration_min"`
+	DurationStr       string               `json:"duration_str"`
+	SpeedMax          float64              `json:"speed_max"`
+	SpeedAvg          float64              `json:"speed_avg"`
+	PowerMax          float64              `json:"power_max"`
+	PowerMin          float64              `json:"power_min"`
+	BatteryDetails    DriveBatteryDetails  `json:"battery_details"`
+	RangeIdeal        DriveRange           `json:"range_ideal"`
+	RangeRated        DriveRange           `json:"range_rated"`
+	OutsideTempAvg    float64              `json:"outside_temp_avg"`
+	InsideTempAvg     float64              `json:"inside_temp_avg"`
+	EnergyConsumedNet float64              `json:"energy_consumed_net"`
+	ConsumptionNet    float64              `json:"consumption_net"`
+}
+
+// DriveOdometerDetails 驾驶里程详情
+type DriveOdometerDetails struct {
+	OdometerStart    float64 `json:"odometer_start"`
+	OdometerEnd      float64 `json:"odometer_end"`
+	OdometerDistance float64 `json:"odometer_distance"`
+}
+
+// DriveBatteryDetails 驾驶电池详情
+type DriveBatteryDetails struct {
+	StartUsableBatteryLevel int  `json:"start_usable_battery_level"`
+	StartBatteryLevel       int  `json:"start_battery_level"`
+	EndUsableBatteryLevel   int  `json:"end_usable_battery_level"`
+	EndBatteryLevel         int  `json:"end_battery_level"`
+	ReducedRange            bool `json:"reduced_range"`
+	IsSufficientlyPrecise   bool `json:"is_sufficiently_precise"`
+}
+
+// DriveRange 驾驶续航范围
+type DriveRange struct {
+	StartRange float64 `json:"start_range"`
+	EndRange   float64 `json:"end_range"`
+	RangeDiff  float64 `json:"range_diff"`
+}

@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  teslamateapi_tgbot:
+    image: ghcr.io/sidecloudgroup/teslamateapi_tgbot:latest
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./config.toml:/app/config.toml:ro

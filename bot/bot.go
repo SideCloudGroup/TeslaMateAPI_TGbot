@@ -132,6 +132,9 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 	case "charge":
 		b.sendCharge(chatID)
 
+	case "drive":
+		b.sendDrive(chatID)
+
 	default:
 		msg := tgbotapi.NewMessage(chatID, "❓ 未知命令，请使用 /help 查看可用命令")
 		b.api.Send(msg)
@@ -169,6 +172,9 @@ func (b *Bot) handleCallbackQuery(query *tgbotapi.CallbackQuery) {
 
 	case data == "charge":
 		b.sendCharge(chatID)
+
+	case data == "drive":
+		b.sendDrive(chatID)
 
 	case data == "back_main":
 		text := b.handler.HandleStart()
@@ -228,6 +234,16 @@ func (b *Bot) handleRefresh(chatID int64, messageID int, refreshType string) {
 		menu := GetRefreshMenu("charge")
 		edit.ReplyMarkup = &menu
 		b.api.Send(edit)
+
+	case "drive":
+		text, err := b.handler.HandleDrive()
+		if err != nil {
+			text = fmt.Sprintf("❌ 获取驾驶信息失败: %v", err)
+		}
+		edit := tgbotapi.NewEditMessageText(chatID, messageID, text)
+		menu := GetRefreshMenu("drive")
+		edit.ReplyMarkup = &menu
+		b.api.Send(edit)
 	}
 }
 
@@ -272,5 +288,16 @@ func (b *Bot) sendCharge(chatID int64) {
 	}
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ReplyMarkup = GetRefreshMenu("charge")
+	b.api.Send(msg)
+}
+
+// sendDrive 发送最近一次驾驶信息
+func (b *Bot) sendDrive(chatID int64) {
+	text, err := b.handler.HandleDrive()
+	if err != nil {
+		text = fmt.Sprintf("❌ 获取驾驶信息失败: %v", err)
+	}
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ReplyMarkup = GetRefreshMenu("drive")
 	b.api.Send(msg)
 }
