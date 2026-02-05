@@ -90,7 +90,7 @@ async def get_drives():
         if not drives:
             return "无驾驶记录"
         result = "🚗 最近驾驶记录：\n"
-        for drive in drives[:5]:  # 显示最近5条
+        for drive in drives[:2]:  # 显示最近2条
             result += f"开始: {drive['start_date']}\n结束: {drive['end_date']}\n起点: {drive['start_address']}\n终点: {drive['end_address']}\n距离: {drive['odometer_details']['odometer_distance']:.2f} km\n持续时间: {drive['duration_str']}\n平均速度: {drive['speed_avg']:.1f} km/h\n最高速度: {drive['speed_max']} km/h\n电池变化: {drive['battery_details']['start_battery_level']}% -> {drive['battery_details']['end_battery_level']}%\n\n"
         return result.strip()
     except Exception as e:
