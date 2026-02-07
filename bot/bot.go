@@ -5,8 +5,9 @@ import (
 	"log"
 	"strings"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"teslamate-bot/client"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 // Bot Telegram Bot结构
@@ -53,8 +54,28 @@ func NewBot(token string, whitelistChatIDs []int64, apiEndpoint string, tmClient
 	}, nil
 }
 
+// registerCommands 向 Telegram 注册 Bot 指令（用于输入框旁的命令列表）
+func (b *Bot) registerCommands() error {
+	cfg := tgbotapi.NewSetMyCommands(
+		tgbotapi.BotCommand{Command: "start", Description: "开始使用 / 主菜单"},
+		tgbotapi.BotCommand{Command: "help", Description: "查看帮助与可用命令"},
+		tgbotapi.BotCommand{Command: "info", Description: "车辆信息"},
+		tgbotapi.BotCommand{Command: "status", Description: "当前状态"},
+		tgbotapi.BotCommand{Command: "battery", Description: "电池健康"},
+		tgbotapi.BotCommand{Command: "charge", Description: "最新充电"},
+		tgbotapi.BotCommand{Command: "drive", Description: "最近驾驶"},
+	)
+	_, err := b.api.Request(cfg)
+	return err
+}
+
 // Start 启动Bot
 func (b *Bot) Start() error {
+	if err := b.registerCommands(); err != nil {
+		log.Printf("注册 Telegram 指令失败（不影响运行）: %v", err)
+	} else {
+		log.Println("已注册 Telegram 指令")
+	}
 	log.Println("开始接收消息...")
 
 	// 配置更新

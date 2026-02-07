@@ -6,8 +6,9 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/valyala/fasthttp"
 	"teslamate-bot/models"
+
+	"github.com/valyala/fasthttp"
 )
 
 // Client TeslaMate API客户端
