@@ -1,5 +1,22 @@
 package models
 
+import (
+	"encoding/json"
+	"math"
+)
+
+// Float2 保留两位小数的浮点数，解析时四舍五入
+type Float2 float64
+
+func (f *Float2) UnmarshalJSON(data []byte) error {
+	var v float64
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	*f = Float2(math.Round(v*100) / 100)
+	return nil
+}
+
 // CarResponse 车辆详情响应
 type CarResponse struct {
 	Data struct {
@@ -151,7 +168,7 @@ type DrivingDetails struct {
 type ActiveRoute struct {
 	Destination         string   `json:"destination"`
 	EnergyAtArrival     int      `json:"energy_at_arrival"`
-	DistanceToArrival   int      `json:"distance_to_arrival"`
+	DistanceToArrival   Float2   `json:"distance_to_arrival"`
 	MinutesToArrival    int      `json:"minutes_to_arrival"`
 	TrafficMinutesDelay int      `json:"traffic_minutes_delay"`
 	Location            Location `json:"location"`
