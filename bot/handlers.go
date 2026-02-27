@@ -2,10 +2,27 @@ package bot
 
 import (
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"teslamate-bot/client"
 )
+
+var localLoc *time.Location
+
+func init() {
+	tz := os.Getenv("TZ")
+	if tz == "" {
+		tz = "UTC"
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil || loc == nil {
+		localLoc = time.UTC
+	} else {
+		localLoc = loc
+	}
+}
 
 // Handler 处理器结构
 type Handler struct {
@@ -145,7 +162,7 @@ func (h *Handler) HandleStatus() (string, error) {
 		sentryStatus,
 		status.Odometer,
 		units.UnitOfLength,
-		formatDateTime(status.StateSince),
+		formatDateTimeLocal(status.StateSince),
 	), nil
 }
 
@@ -199,8 +216,8 @@ func (h *Handler) HandleCharge() (string, error) {
 		return "", err
 	}
 
-	// 解析日期时间
-	startDate, startTime := splitDateTime(charge.StartDate)
+	// 解析日期时间（转为本地时区显示）
+	startDate, startTime := splitDateTimeLocal(charge.StartDate)
 	endTime := extractTime(charge.EndDate)
 
 	return fmt.Sprintf(
@@ -236,7 +253,7 @@ func (h *Handler) HandleDrive() (string, error) {
 		return "", err
 	}
 
-	startDate, startTime := splitDateTime(drive.StartDate)
+	startDate, startTime := splitDateTimeLocal(drive.StartDate)
 	endTime := extractTime(drive.EndDate)
 
 	return fmt.Sprintf(
@@ -281,16 +298,29 @@ func (h *Handler) HandleDrive() (string, error) {
 	), nil
 }
 
-// formatDateTime 格式化日期时间
-func formatDateTime(datetime string) string {
-	// 简单处理，只取日期和时间部分
-	if len(datetime) >= 19 {
-		return datetime[:19]
+// formatDateTimeLocal 将 API 时间字符串转为本地时区并格式化显示
+func formatDateTimeLocal(datetime string) string {
+	t, err := time.Parse(time.RFC3339, datetime)
+	if err != nil {
+		if len(datetime) >= 19 {
+			return datetime[:19]
+		}
+		return datetime
 	}
-	return datetime
+	return t.In(localLoc).Format("2006-01-02 15:04:05")
 }
 
-// splitDateTime 分割日期和时间
+// splitDateTimeLocal 将 API 时间字符串转为本地时区，返回日期与时间部分
+func splitDateTimeLocal(datetime string) (dateStr, timeStr string) {
+	t, err := time.Parse(time.RFC3339, datetime)
+	if err != nil {
+		return splitDateTime(datetime)
+	}
+	local := t.In(localLoc)
+	return local.Format("2006-01-02"), local.Format("15:04:05")
+}
+
+// splitDateTime 分割日期和时间（用于解析失败回退）
 func splitDateTime(datetime string) (string, string) {
 	if len(datetime) < 19 {
 		return datetime, ""
@@ -302,8 +332,8 @@ func splitDateTime(datetime string) (string, string) {
 	return datetime, ""
 }
 
-// extractTime 提取时间部分
+// extractTime 提取时间部分（本地时区）
 func extractTime(datetime string) string {
-	_, time := splitDateTime(datetime)
-	return time
+	_, timeStr := splitDateTimeLocal(datetime)
+	return timeStr
 }

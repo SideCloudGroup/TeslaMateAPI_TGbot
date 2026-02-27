@@ -157,9 +157,18 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 		b.sendDrive(chatID)
 
 	default:
+		// 群组中只响应已注册命令，未注册的命令不回复
+		if b.isGroupChat(message.Chat) {
+			return
+		}
 		msg := tgbotapi.NewMessage(chatID, "❓ 未知命令，请使用 /help 查看可用命令")
 		b.api.Send(msg)
 	}
+}
+
+// isGroupChat 是否为群组或超级群组
+func (b *Bot) isGroupChat(chat *tgbotapi.Chat) bool {
+	return chat.Type == "group" || chat.Type == "supergroup"
 }
 
 // handleCallbackQuery 处理回调查询
