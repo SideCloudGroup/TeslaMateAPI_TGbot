@@ -17,6 +17,22 @@ func (f *Float2) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// FlexInt 可解析 JSON 中的整数或浮点数（浮点数四舍五入为整数）
+type FlexInt int
+
+func (i *FlexInt) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		*i = 0
+		return nil
+	}
+	var v float64
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	*i = FlexInt(int(math.Round(v)))
+	return nil
+}
+
 // CarResponse 车辆详情响应
 type CarResponse struct {
 	Data struct {
@@ -120,8 +136,8 @@ type CarStatusInfo struct {
 	PassengerRearDoorOpen  bool `json:"passenger_rear_door_open"`
 	TrunkOpen              bool `json:"trunk_open"`
 	FrunkOpen              bool `json:"frunk_open"`
-	IsUserPresent          bool `json:"is_user_present"`
-	CenterDisplayState     int  `json:"center_display_state"`
+	IsUserPresent          bool    `json:"is_user_present"`
+	CenterDisplayState     FlexInt `json:"center_display_state"`
 }
 
 // StatusCarDetails 状态中的车辆详情
@@ -157,20 +173,20 @@ type DrivingDetails struct {
 	ActiveRouteDestination string      `json:"active_route_destination"`
 	ActiveRouteLatitude    float64     `json:"active_route_latitude"`
 	ActiveRouteLongitude   float64     `json:"active_route_longitude"`
-	ShiftState             string      `json:"shift_state"`
-	Power                  int         `json:"power"`
-	Speed                  int         `json:"speed"`
-	Heading                int         `json:"heading"`
-	Elevation              int         `json:"elevation"`
+	ShiftState             string  `json:"shift_state"`
+	Power                  FlexInt `json:"power"`
+	Speed                  FlexInt `json:"speed"`
+	Heading                FlexInt `json:"heading"`
+	Elevation              FlexInt `json:"elevation"`
 }
 
 // ActiveRoute 活动路线
 type ActiveRoute struct {
 	Destination         string   `json:"destination"`
-	EnergyAtArrival     int      `json:"energy_at_arrival"`
+	EnergyAtArrival     FlexInt  `json:"energy_at_arrival"`
 	DistanceToArrival   Float2   `json:"distance_to_arrival"`
-	MinutesToArrival    int      `json:"minutes_to_arrival"`
-	TrafficMinutesDelay int      `json:"traffic_minutes_delay"`
+	MinutesToArrival    float64  `json:"minutes_to_arrival"`
+	TrafficMinutesDelay float64  `json:"traffic_minutes_delay"`
 	Location            Location `json:"location"`
 }
 
@@ -188,8 +204,8 @@ type BatteryDetails struct {
 	EstBatteryRange    float64 `json:"est_battery_range"`
 	RatedBatteryRange  float64 `json:"rated_battery_range"`
 	IdealBatteryRange  float64 `json:"ideal_battery_range"`
-	BatteryLevel       int     `json:"battery_level"`
-	UsableBatteryLevel int     `json:"usable_battery_level"`
+	BatteryLevel       FlexInt `json:"battery_level"`
+	UsableBatteryLevel FlexInt `json:"usable_battery_level"`
 }
 
 // ChargingDetails 充电详情
@@ -197,14 +213,14 @@ type ChargingDetails struct {
 	PluggedIn                  bool    `json:"plugged_in"`
 	ChargingState              string  `json:"charging_state"`
 	ChargeEnergyAdded          float64 `json:"charge_energy_added"`
-	ChargeLimitSOC             int     `json:"charge_limit_soc"`
+	ChargeLimitSOC             FlexInt `json:"charge_limit_soc"`
 	ChargePortDoorOpen         bool    `json:"charge_port_door_open"`
-	ChargerActualCurrent       int     `json:"charger_actual_current"`
-	ChargerPhases              int     `json:"charger_phases"`
-	ChargerPower               int     `json:"charger_power"`
-	ChargerVoltage             int     `json:"charger_voltage"`
-	ChargeCurrentRequest       int     `json:"charge_current_request"`
-	ChargeCurrentRequestMax    int     `json:"charge_current_request_max"`
+	ChargerActualCurrent       float64 `json:"charger_actual_current"`
+	ChargerPhases              FlexInt `json:"charger_phases"`
+	ChargerPower               float64 `json:"charger_power"`
+	ChargerVoltage             FlexInt `json:"charger_voltage"`
+	ChargeCurrentRequest       FlexInt `json:"charge_current_request"`
+	ChargeCurrentRequestMax    FlexInt `json:"charge_current_request_max"`
 	ScheduledChargingStartTime string  `json:"scheduled_charging_start_time"`
 	TimeToFullCharge           float64 `json:"time_to_full_charge"`
 }

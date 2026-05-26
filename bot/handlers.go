@@ -110,7 +110,7 @@ func (h *Handler) HandleStatus() (string, error) {
 	chargingStatus := "未充电"
 	if status.ChargingDetails.PluggedIn {
 		if status.ChargingDetails.ChargingState != "" {
-			chargingStatus = fmt.Sprintf("充电中 (%.1f kW)", float64(status.ChargingDetails.ChargerPower))
+			chargingStatus = fmt.Sprintf("充电中 (%.1f kW)", status.ChargingDetails.ChargerPower)
 		} else {
 			chargingStatus = "已插入，未充电"
 		}
