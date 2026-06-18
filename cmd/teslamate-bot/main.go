@@ -80,6 +80,7 @@ func main() {
 		cfg.Telegram.BotToken,
 		cfg.Telegram.WhitelistChatIDs,
 		cfg.Telegram.APIEndpoint,
+		cfg.Telegram.HTTPProxy,
 		tmClient,
 	)
 	if err != nil {

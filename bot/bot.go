@@ -3,6 +3,8 @@ package bot
 import (
 	"fmt"
 	"log"
+	"net/http"
+	"net/url"
 	"strings"
 
 	"teslamate-bot/client"
@@ -18,25 +20,29 @@ type Bot struct {
 }
 
 // NewBot 创建新的Bot实例
-func NewBot(token string, whitelistChatIDs []int64, apiEndpoint string, tmClient *client.Client) (*Bot, error) {
-	var botAPI *tgbotapi.BotAPI
-	var err error
-
-	// 初始化Telegram Bot API
+func NewBot(token string, whitelistChatIDs []int64, apiEndpoint, httpProxy string, tmClient *client.Client) (*Bot, error) {
+	endpoint := tgbotapi.APIEndpoint
 	if apiEndpoint != "" {
-		// 使用自定义API端点
-		botAPI, err = tgbotapi.NewBotAPIWithAPIEndpoint(token, apiEndpoint+"/bot%s/%s")
-		if err != nil {
-			return nil, fmt.Errorf("初始化Telegram Bot失败（自定义API: %s）: %w", apiEndpoint, err)
-		}
+		endpoint = apiEndpoint + "/bot%s/%s"
 		log.Printf("使用自定义Telegram API: %s", apiEndpoint)
 	} else {
-		// 使用默认Telegram API
-		botAPI, err = tgbotapi.NewBotAPI(token)
-		if err != nil {
-			return nil, fmt.Errorf("初始化Telegram Bot失败: %w", err)
-		}
 		log.Println("使用默认Telegram API")
+	}
+
+	httpClient, err := newTelegramHTTPClient(httpProxy)
+	if err != nil {
+		return nil, err
+	}
+	if httpProxy != "" {
+		log.Printf("使用HTTP代理连接Telegram API: %s", redactProxyURL(httpProxy))
+	}
+
+	botAPI, err := tgbotapi.NewBotAPIWithClient(token, endpoint, httpClient)
+	if err != nil {
+		if apiEndpoint != "" {
+			return nil, fmt.Errorf("初始化Telegram Bot失败（自定义API: %s）: %w", apiEndpoint, err)
+		}
+		return nil, fmt.Errorf("初始化Telegram Bot失败: %w", err)
 	}
 
 	// 创建白名单映射
@@ -52,6 +58,34 @@ func NewBot(token string, whitelistChatIDs []int64, apiEndpoint string, tmClient
 		handler:          NewHandler(tmClient),
 		whitelistChatIDs: whitelist,
 	}, nil
+}
+
+func newTelegramHTTPClient(proxyURL string) (*http.Client, error) {
+	if proxyURL == "" {
+		return &http.Client{}, nil
+	}
+
+	proxy, err := url.Parse(proxyURL)
+	if err != nil {
+		return nil, fmt.Errorf("解析HTTP代理URL失败: %w", err)
+	}
+
+	return &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyURL(proxy),
+		},
+	}, nil
+}
+
+func redactProxyURL(proxyURL string) string {
+	u, err := url.Parse(proxyURL)
+	if err != nil {
+		return proxyURL
+	}
+	if u.User != nil {
+		u.User = url.UserPassword("***", "***")
+	}
+	return u.String()
 }
 
 // registerCommands 向 Telegram 注册 Bot 指令（用于输入框旁的命令列表）

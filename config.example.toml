@@ -10,6 +10,11 @@ whitelist_chat_ids = [123456789, 987654321]
 # 如果未设置或留空，则使用官方API
 api_endpoint = ""
 
+# HTTP代理 (可选)
+# 用于通过代理连接 Telegram API，支持 http/https 及带认证的代理
+# 示例: http://127.0.0.1:7890 或 http://user:pass@proxy.example.com:8080
+http_proxy = ""
+
 # TeslaMate API配置
 [teslamate]
 # TeslaMate API的URL地址

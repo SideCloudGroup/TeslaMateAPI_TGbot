@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 
 	"github.com/BurntSushi/toml"
@@ -18,6 +19,7 @@ type TelegramConfig struct {
 	BotToken         string  `toml:"bot_token"`
 	WhitelistChatIDs []int64 `toml:"whitelist_chat_ids"`
 	APIEndpoint      string  `toml:"api_endpoint"` // 自定义API端点（可选）
+	HTTPProxy        string  `toml:"http_proxy"`   // HTTP代理地址（可选）
 }
 
 // TeslaMateConfig TeslaMate API配置
@@ -60,7 +62,12 @@ func (c *Config) Validate() error {
 	if len(c.Telegram.WhitelistChatIDs) == 0 {
 		return fmt.Errorf("telegram.whitelist_chat_ids 不能为空")
 	}
-	// api_endpoint为可选项，如果为空则使用默认Telegram API
+	// api_endpoint、http_proxy 为可选项
+	if c.Telegram.HTTPProxy != "" {
+		if _, err := url.Parse(c.Telegram.HTTPProxy); err != nil {
+			return fmt.Errorf("telegram.http_proxy URL无效: %w", err)
+		}
+	}
 	if c.TeslaMate.APIURL == "" {
 		return fmt.Errorf("teslamate.api_url 不能为空")
 	}
