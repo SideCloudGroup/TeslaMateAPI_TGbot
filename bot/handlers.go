@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"teslamate-bot/client"
+	"teslamate-bot/models"
 )
 
 var localLoc *time.Location
@@ -132,10 +133,31 @@ func (h *Handler) HandleStatus() (string, error) {
 		sentryStatus = "✅ 开启"
 	}
 
+	speedLine := ""
+	if isDriving(status) {
+		speed := int(status.DrivingDetails.Speed)
+		shift := status.DrivingDetails.ShiftState
+		if shift != "" {
+			speedLine = fmt.Sprintf("🚀 当前速度: %d %s/h (%s)\n", speed, units.UnitOfLength, shift)
+		} else {
+			speedLine = fmt.Sprintf("🚀 当前速度: %d %s/h\n", speed, units.UnitOfLength)
+		}
+	}
+
+	todayDriveLine := ""
+	if todayDistance, todayCount, todayUnits, err := h.client.GetTodayDriveDistance(); err == nil {
+		lengthUnit := units.UnitOfLength
+		if todayUnits != nil && todayUnits.UnitOfLength != "" {
+			lengthUnit = todayUnits.UnitOfLength
+		}
+		todayDriveLine = fmt.Sprintf("📅 今日行驶: %.2f %s (%d 次)\n", todayDistance, lengthUnit, todayCount)
+	}
+
 	return fmt.Sprintf(
 		"🚗 %s (Model %s)\n"+
 			"━━━━━━━━━━━━━━━━━━━━\n"+
 			"%s 车辆状态: %s\n"+
+			"%s"+
 			"🔋 电量: %d%% (%.2f %s)\n"+
 			"🔌 充电: %s\n"+
 			"🌡️ 车内温度: %.1f°%s\n"+
@@ -143,12 +165,14 @@ func (h *Handler) HandleStatus() (string, error) {
 			"%s\n"+
 			"🪟 车窗: %s\n"+
 			"🚨 哨兵模式: %s\n"+
+			"%s"+
 			"📏 里程: %.2f %s\n"+
 			"⏰ 状态更新: %s",
 		status.DisplayName,
 		status.CarDetails.Model,
 		stateEmoji,
 		status.State,
+		speedLine,
 		status.BatteryDetails.BatteryLevel,
 		status.BatteryDetails.RatedBatteryRange,
 		units.UnitOfLength,
@@ -160,10 +184,19 @@ func (h *Handler) HandleStatus() (string, error) {
 		doorStatus,
 		windowStatus,
 		sentryStatus,
+		todayDriveLine,
 		status.Odometer,
 		units.UnitOfLength,
 		formatDateTimeLocal(status.StateSince),
 	), nil
+}
+
+func isDriving(status models.CarStatus) bool {
+	shift := status.DrivingDetails.ShiftState
+	if shift == "D" || shift == "R" || shift == "N" {
+		return true
+	}
+	return status.State == "online" && status.DrivingDetails.Speed > 0
 }
 
 // HandleBattery 处理电池健康度请求

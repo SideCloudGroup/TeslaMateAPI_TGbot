@@ -4,12 +4,28 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
 	"time"
 
 	"teslamate-bot/models"
 
 	"github.com/valyala/fasthttp"
 )
+
+var localLoc *time.Location
+
+func init() {
+	tz := os.Getenv("TZ")
+	if tz == "" {
+		tz = "UTC"
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil || loc == nil {
+		localLoc = time.UTC
+	} else {
+		localLoc = loc
+	}
+}
 
 // Client TeslaMate API客户端
 type Client struct {
@@ -150,24 +166,58 @@ func (c *Client) GetLatestCharge() (*models.Charge, error) {
 	return &response.Data.Charges[0], nil
 }
 
-// GetLatestDrive 获取最近一次驾驶记录（默认 7 天内最后一条）
-func (c *Client) GetLatestDrive() (*models.Drive, *models.Units, error) {
-	startDate := time.Now().Add(-7 * 24 * time.Hour).UTC().Format(time.RFC3339)
-	path := fmt.Sprintf("/api/v1/cars/%d/drives?startDate=%s", c.carID, url.QueryEscape(startDate))
+func (c *Client) getDrives(startDate, endDate string) (*models.DrivesResponse, error) {
+	path := fmt.Sprintf(
+		"/api/v1/cars/%d/drives?startDate=%s&endDate=%s",
+		c.carID,
+		url.QueryEscape(startDate),
+		url.QueryEscape(endDate),
+	)
 	body, err := c.doRequest("GET", path)
 	if err != nil {
-		return nil, nil, fmt.Errorf("获取驾驶记录失败: %w", err)
+		return nil, fmt.Errorf("获取驾驶记录失败: %w", err)
 	}
 
 	var response models.DrivesResponse
 	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, nil, fmt.Errorf("解析驾驶记录失败: %w", err)
+		return nil, fmt.Errorf("解析驾驶记录失败: %w", err)
+	}
+
+	return &response, nil
+}
+
+// GetLatestDrive 获取最近一次驾驶记录（默认 7 天内最后一条）
+func (c *Client) GetLatestDrive() (*models.Drive, *models.Units, error) {
+	startDate := time.Now().Add(-7 * 24 * time.Hour).UTC().Format(time.RFC3339)
+	endDate := time.Now().UTC().Format(time.RFC3339)
+	response, err := c.getDrives(startDate, endDate)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	if len(response.Data.Drives) == 0 {
 		return nil, nil, fmt.Errorf("7天内暂无驾驶记录")
 	}
 
-	// API 返回按时间排序，取第一条为最近一次
 	return &response.Data.Drives[0], &response.Data.Units, nil
+}
+
+// GetTodayDriveDistance 返回今日（本地时区）行程总里程与次数
+func (c *Client) GetTodayDriveDistance() (float64, int, *models.Units, error) {
+	now := time.Now().In(localLoc)
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, localLoc)
+	startDate := startOfDay.Format(time.RFC3339)
+	endDate := now.Format(time.RFC3339)
+
+	response, err := c.getDrives(startDate, endDate)
+	if err != nil {
+		return 0, 0, nil, err
+	}
+
+	var totalDistance float64
+	for _, drive := range response.Data.Drives {
+		totalDistance += drive.OdometerDetails.OdometerDistance
+	}
+
+	return totalDistance, len(response.Data.Drives), &response.Data.Units, nil
 }
