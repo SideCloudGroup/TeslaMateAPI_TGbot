@@ -9,6 +9,7 @@ import (
 	"teslamate-bot/bot"
 	"teslamate-bot/client"
 	"teslamate-bot/config"
+	"teslamate-bot/state"
 )
 
 var (
@@ -16,10 +17,8 @@ var (
 )
 
 func main() {
-	// 设置日志格式
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	// 定义命令行参数
 	var (
 		configPath  = flag.String("config", "config.toml", "配置文件路径（默认: 当前目录 config.toml）")
 		showVersion = flag.Bool("version", false, "显示版本信息")
@@ -32,14 +31,12 @@ func main() {
 
 	flag.Parse()
 
-	// 显示版本信息
 	if *showVersion {
 		fmt.Printf("Tesla TeslaMate Telegram Bot v%s\n", version)
 		fmt.Println("基于TeslaMate API的Telegram Bot")
 		os.Exit(0)
 	}
 
-	// 显示帮助信息
 	if *showHelp {
 		fmt.Println("Tesla TeslaMate Telegram Bot - 使用说明")
 		fmt.Println()
@@ -65,23 +62,27 @@ func main() {
 
 	log.Println("配置文件加载成功")
 
-	// 初始化TeslaMate API客户端
 	tmClient := client.NewClient(
 		cfg.TeslaMate.APIURL,
 		cfg.TeslaMate.APIKey,
-		cfg.TeslaMate.CarID,
 		cfg.TeslaMate.Timeout,
 		cfg.TeslaMate.Headers,
 	)
-	log.Printf("TeslaMate API客户端初始化完成 (CarID: %d)", cfg.TeslaMate.CarID)
+	log.Println("TeslaMate API客户端初始化完成")
 
-	// 初始化Telegram Bot
+	carState, err := state.NewCarStateStore(cfg.TeslaMate.StateFile, cfg.TeslaMate.CarID)
+	if err != nil {
+		log.Fatalf("初始化选车状态失败: %v", err)
+	}
+	log.Printf("选车状态已加载 (文件: %s, 默认车辆: %d)", cfg.TeslaMate.StateFile, cfg.TeslaMate.CarID)
+
 	tgBot, err := bot.NewBot(
 		cfg.Telegram.BotToken,
 		cfg.Telegram.WhitelistChatIDs,
 		cfg.Telegram.APIEndpoint,
 		cfg.Telegram.HTTPProxy,
 		tmClient,
+		carState,
 	)
 	if err != nil {
 		log.Fatalf("初始化Telegram Bot失败: %v", err)
@@ -89,7 +90,6 @@ func main() {
 
 	log.Printf("已授权 %d 个会话使用Bot", len(cfg.Telegram.WhitelistChatIDs))
 
-	// 启动Bot
 	log.Println("Tesla Telegram Bot 启动成功!")
 	if err := tgBot.Start(); err != nil {
 		log.Fatalf("Bot运行错误: %v", err)

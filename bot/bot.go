@@ -5,9 +5,11 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"teslamate-bot/client"
+	"teslamate-bot/state"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -17,10 +19,11 @@ type Bot struct {
 	api              *tgbotapi.BotAPI
 	handler          *Handler
 	whitelistChatIDs map[int64]bool
+	carState         *state.CarStateStore
 }
 
 // NewBot 创建新的Bot实例
-func NewBot(token string, whitelistChatIDs []int64, apiEndpoint, httpProxy string, tmClient *client.Client) (*Bot, error) {
+func NewBot(token string, whitelistChatIDs []int64, apiEndpoint, httpProxy string, tmClient *client.Client, carState *state.CarStateStore) (*Bot, error) {
 	endpoint := tgbotapi.APIEndpoint
 	if apiEndpoint != "" {
 		endpoint = apiEndpoint + "/bot%s/%s"
@@ -45,7 +48,6 @@ func NewBot(token string, whitelistChatIDs []int64, apiEndpoint, httpProxy strin
 		return nil, fmt.Errorf("初始化Telegram Bot失败: %w", err)
 	}
 
-	// 创建白名单映射
 	whitelist := make(map[int64]bool)
 	for _, chatID := range whitelistChatIDs {
 		whitelist[chatID] = true
@@ -57,6 +59,7 @@ func NewBot(token string, whitelistChatIDs []int64, apiEndpoint, httpProxy strin
 		api:              botAPI,
 		handler:          NewHandler(tmClient),
 		whitelistChatIDs: whitelist,
+		carState:         carState,
 	}, nil
 }
 
@@ -88,11 +91,11 @@ func redactProxyURL(proxyURL string) string {
 	return u.String()
 }
 
-// registerCommands 向 Telegram 注册 Bot 指令（用于输入框旁的命令列表）
 func (b *Bot) registerCommands() error {
 	cfg := tgbotapi.NewSetMyCommands(
 		tgbotapi.BotCommand{Command: "start", Description: "开始使用 / 主菜单"},
 		tgbotapi.BotCommand{Command: "help", Description: "查看帮助与可用命令"},
+		tgbotapi.BotCommand{Command: "cars", Description: "查看并切换车辆"},
 		tgbotapi.BotCommand{Command: "info", Description: "车辆信息"},
 		tgbotapi.BotCommand{Command: "status", Description: "当前状态"},
 		tgbotapi.BotCommand{Command: "battery", Description: "电池健康"},
@@ -112,21 +115,16 @@ func (b *Bot) Start() error {
 	}
 	log.Println("开始接收消息...")
 
-	// 配置更新
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
-	// 获取更新通道
 	updates := b.api.GetUpdatesChan(u)
 
-	// 处理更新
 	for update := range updates {
-		// 处理消息
 		if update.Message != nil {
 			b.handleMessage(update.Message)
 		}
 
-		// 处理回调查询
 		if update.CallbackQuery != nil {
 			b.handleCallbackQuery(update.CallbackQuery)
 		}
@@ -135,28 +133,86 @@ func (b *Bot) Start() error {
 	return nil
 }
 
-// isAuthorized 检查用户是否在白名单中
 func (b *Bot) isAuthorized(chatID int64) bool {
 	return b.whitelistChatIDs[chatID]
 }
 
-// handleMessage 处理文本消息
+func (b *Bot) resolveCarID(chatID int64) (int, error) {
+	if id, ok := b.carState.Get(chatID); ok {
+		if err := b.validateCarID(id); err != nil {
+			_ = b.carState.Clear(chatID)
+			return 0, err
+		}
+		return id, nil
+	}
+
+	defaultID := b.carState.DefaultID()
+	if defaultID > 0 {
+		if err := b.validateCarID(defaultID); err != nil {
+			return 0, err
+		}
+		return defaultID, nil
+	}
+
+	cars, err := b.handler.client.GetCars()
+	if err != nil {
+		return 0, fmt.Errorf("无可用车辆: %w", err)
+	}
+	if len(cars) == 0 {
+		return 0, fmt.Errorf("无可用车辆")
+	}
+
+	if len(cars) == 1 {
+		_ = b.carState.Set(chatID, cars[0].CarID)
+	}
+	return cars[0].CarID, nil
+}
+
+func (b *Bot) validateCarID(carID int) error {
+	cars, err := b.handler.client.GetCars()
+	if err != nil {
+		return err
+	}
+	for _, car := range cars {
+		if car.CarID == carID {
+			return nil
+		}
+	}
+	return fmt.Errorf("车辆 #%d 不存在，请使用 /cars 重新选择", carID)
+}
+
+func (b *Bot) getCarName(carID int) string {
+	cars, err := b.handler.client.GetCars()
+	if err != nil {
+		return fmt.Sprintf("车辆 #%d", carID)
+	}
+	return b.handler.CarDisplayName(cars, carID)
+}
+
+func (b *Bot) showCarSwitch() bool {
+	cars, err := b.handler.client.GetCars()
+	if err != nil {
+		return true
+	}
+	return len(cars) > 1
+}
+
+func (b *Bot) carSelectErrorText() string {
+	return "❌ 无法确定当前车辆，请使用 /cars 选择车辆"
+}
+
 func (b *Bot) handleMessage(message *tgbotapi.Message) {
-	// 检查白名单
 	if !b.isAuthorized(message.Chat.ID) {
 		log.Printf("未授权访问尝试: ChatID=%d, User=%s", message.Chat.ID, message.From.UserName)
-		// 不做任何响应，直接返回
 		return
 	}
 
-	// 处理命令
 	if message.IsCommand() {
 		b.handleCommand(message)
 		return
 	}
 }
 
-// handleCommand 处理命令
 func (b *Bot) handleCommand(message *tgbotapi.Message) {
 	command := message.Command()
 	chatID := message.Chat.ID
@@ -165,15 +221,15 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 
 	switch command {
 	case "start":
-		text := b.handler.HandleStart()
-		msg := tgbotapi.NewMessage(chatID, text)
-		msg.ReplyMarkup = GetMainMenu()
-		b.api.Send(msg)
+		b.sendMainMenu(chatID, 0)
 
 	case "help":
 		text := b.handler.HandleHelp()
 		msg := tgbotapi.NewMessage(chatID, text)
 		b.api.Send(msg)
+
+	case "cars":
+		b.sendCars(chatID, 0)
 
 	case "info":
 		b.sendInfo(chatID)
@@ -191,7 +247,6 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 		b.sendDrive(chatID)
 
 	default:
-		// 群组中只响应已注册命令，未注册的命令不回复
 		if b.isGroupChat(message.Chat) {
 			return
 		}
@@ -200,16 +255,12 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 	}
 }
 
-// isGroupChat 是否为群组或超级群组
 func (b *Bot) isGroupChat(chat *tgbotapi.Chat) bool {
 	return chat.Type == "group" || chat.Type == "supergroup"
 }
 
-// handleCallbackQuery 处理回调查询
 func (b *Bot) handleCallbackQuery(query *tgbotapi.CallbackQuery) {
-	// 检查白名单
 	if !b.isAuthorized(query.Message.Chat.ID) {
-		// 不做任何响应，直接返回
 		return
 	}
 
@@ -219,35 +270,66 @@ func (b *Bot) handleCallbackQuery(query *tgbotapi.CallbackQuery) {
 
 	log.Printf("收到回调: %s, ChatID=%d", data, chatID)
 
-	// 先回应回调查询
-	callback := tgbotapi.NewCallback(query.ID, "")
-	b.api.Request(callback)
-
-	// 处理不同的回调
 	switch {
+	case strings.HasPrefix(data, "select_car_"):
+		carIDStr := strings.TrimPrefix(data, "select_car_")
+		carID, err := strconv.Atoi(carIDStr)
+		if err != nil {
+			callback := tgbotapi.NewCallback(query.ID, "❌ 无效的车辆")
+			b.api.Request(callback)
+			return
+		}
+		if err := b.validateCarID(carID); err != nil {
+			callback := tgbotapi.NewCallback(query.ID, "❌ 车辆不存在")
+			b.api.Request(callback)
+			return
+		}
+		if err := b.carState.Set(chatID, carID); err != nil {
+			log.Printf("保存选车状态失败: %v", err)
+		}
+		carName := b.getCarName(carID)
+		callback := tgbotapi.NewCallback(query.ID, fmt.Sprintf("已切换到 %s", carName))
+		b.api.Request(callback)
+		b.sendMainMenu(chatID, messageID)
+
+	case data == "cars":
+		callback := tgbotapi.NewCallback(query.ID, "")
+		b.api.Request(callback)
+		b.sendCars(chatID, messageID)
+
 	case data == "info":
+		callback := tgbotapi.NewCallback(query.ID, "")
+		b.api.Request(callback)
 		b.sendInfo(chatID)
 
 	case data == "status":
+		callback := tgbotapi.NewCallback(query.ID, "")
+		b.api.Request(callback)
 		b.sendStatus(chatID)
 
 	case data == "battery":
+		callback := tgbotapi.NewCallback(query.ID, "")
+		b.api.Request(callback)
 		b.sendBattery(chatID)
 
 	case data == "charge":
+		callback := tgbotapi.NewCallback(query.ID, "")
+		b.api.Request(callback)
 		b.sendCharge(chatID)
 
 	case data == "drive":
+		callback := tgbotapi.NewCallback(query.ID, "")
+		b.api.Request(callback)
 		b.sendDrive(chatID)
 
 	case data == "back_main":
-		text := b.handler.HandleStart()
-		edit := tgbotapi.NewEditMessageText(chatID, messageID, text)
-		menu := GetMainMenu()
-		edit.ReplyMarkup = &menu
-		b.api.Send(edit)
+		callback := tgbotapi.NewCallback(query.ID, "")
+		b.api.Request(callback)
+		b.sendMainMenu(chatID, messageID)
 
 	case strings.HasPrefix(data, "refresh_"):
+		callback := tgbotapi.NewCallback(query.ID, "")
+		b.api.Request(callback)
 		refreshType := strings.TrimPrefix(data, "refresh_")
 		b.handleRefresh(chatID, messageID, refreshType)
 
@@ -256,11 +338,71 @@ func (b *Bot) handleCallbackQuery(query *tgbotapi.CallbackQuery) {
 	}
 }
 
-// handleRefresh 处理刷新操作
+func (b *Bot) sendMainMenu(chatID int64, messageID int) {
+	carID, err := b.resolveCarID(chatID)
+	carName := ""
+	if err == nil {
+		carName = b.getCarName(carID)
+	}
+	text := b.handler.HandleStart(carName)
+	menu := GetMainMenu(b.showCarSwitch())
+
+	if messageID > 0 {
+		edit := tgbotapi.NewEditMessageText(chatID, messageID, text)
+		edit.ReplyMarkup = &menu
+		b.api.Send(edit)
+		return
+	}
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ReplyMarkup = menu
+	b.api.Send(msg)
+}
+
+func (b *Bot) sendCars(chatID int64, messageID int) {
+	carID, _ := b.resolveCarID(chatID)
+	text, cars, err := b.handler.HandleCars(carID)
+	if err != nil {
+		text = fmt.Sprintf("❌ 获取车辆列表失败: %v", err)
+		if messageID > 0 {
+			edit := tgbotapi.NewEditMessageText(chatID, messageID, text)
+			b.api.Send(edit)
+		} else {
+			msg := tgbotapi.NewMessage(chatID, text)
+			b.api.Send(msg)
+		}
+		return
+	}
+
+	if len(cars) == 1 && carID == 0 {
+		_ = b.carState.Set(chatID, cars[0].CarID)
+		carID = cars[0].CarID
+	}
+
+	menu := GetCarSelectMenu(cars, carID)
+	if messageID > 0 {
+		edit := tgbotapi.NewEditMessageText(chatID, messageID, text)
+		edit.ReplyMarkup = &menu
+		b.api.Send(edit)
+		return
+	}
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ReplyMarkup = menu
+	b.api.Send(msg)
+}
+
 func (b *Bot) handleRefresh(chatID int64, messageID int, refreshType string) {
+	carID, err := b.resolveCarID(chatID)
+	if err != nil {
+		edit := tgbotapi.NewEditMessageText(chatID, messageID, b.carSelectErrorText())
+		b.api.Send(edit)
+		return
+	}
+
 	switch refreshType {
 	case "info":
-		text, err := b.handler.HandleInfo()
+		text, err := b.handler.HandleInfo(carID)
 		if err != nil {
 			text = fmt.Sprintf("❌ 获取车辆信息失败: %v", err)
 		}
@@ -270,7 +412,7 @@ func (b *Bot) handleRefresh(chatID int64, messageID int, refreshType string) {
 		b.api.Send(edit)
 
 	case "status":
-		text, err := b.handler.HandleStatus()
+		text, err := b.handler.HandleStatus(carID)
 		if err != nil {
 			text = fmt.Sprintf("❌ 获取车辆状态失败: %v", err)
 		}
@@ -280,7 +422,7 @@ func (b *Bot) handleRefresh(chatID int64, messageID int, refreshType string) {
 		b.api.Send(edit)
 
 	case "battery":
-		text, err := b.handler.HandleBattery()
+		text, err := b.handler.HandleBattery(carID)
 		if err != nil {
 			text = fmt.Sprintf("❌ 获取电池健康度失败: %v", err)
 		}
@@ -290,7 +432,7 @@ func (b *Bot) handleRefresh(chatID int64, messageID int, refreshType string) {
 		b.api.Send(edit)
 
 	case "charge":
-		text, err := b.handler.HandleCharge()
+		text, err := b.handler.HandleCharge(carID)
 		if err != nil {
 			text = fmt.Sprintf("❌ 获取充电记录失败: %v", err)
 		}
@@ -300,7 +442,7 @@ func (b *Bot) handleRefresh(chatID int64, messageID int, refreshType string) {
 		b.api.Send(edit)
 
 	case "drive":
-		text, err := b.handler.HandleDrive()
+		text, err := b.handler.HandleDrive(carID)
 		if err != nil {
 			text = fmt.Sprintf("❌ 获取驾驶信息失败: %v", err)
 		}
@@ -311,9 +453,14 @@ func (b *Bot) handleRefresh(chatID int64, messageID int, refreshType string) {
 	}
 }
 
-// sendInfo 发送车辆信息
 func (b *Bot) sendInfo(chatID int64) {
-	text, err := b.handler.HandleInfo()
+	carID, err := b.resolveCarID(chatID)
+	if err != nil {
+		msg := tgbotapi.NewMessage(chatID, b.carSelectErrorText())
+		b.api.Send(msg)
+		return
+	}
+	text, err := b.handler.HandleInfo(carID)
 	if err != nil {
 		text = fmt.Sprintf("❌ 获取车辆信息失败: %v", err)
 	}
@@ -322,9 +469,14 @@ func (b *Bot) sendInfo(chatID int64) {
 	b.api.Send(msg)
 }
 
-// sendStatus 发送车辆状态
 func (b *Bot) sendStatus(chatID int64) {
-	text, err := b.handler.HandleStatus()
+	carID, err := b.resolveCarID(chatID)
+	if err != nil {
+		msg := tgbotapi.NewMessage(chatID, b.carSelectErrorText())
+		b.api.Send(msg)
+		return
+	}
+	text, err := b.handler.HandleStatus(carID)
 	if err != nil {
 		text = fmt.Sprintf("❌ 获取车辆状态失败: %v", err)
 	}
@@ -333,9 +485,14 @@ func (b *Bot) sendStatus(chatID int64) {
 	b.api.Send(msg)
 }
 
-// sendBattery 发送电池健康度
 func (b *Bot) sendBattery(chatID int64) {
-	text, err := b.handler.HandleBattery()
+	carID, err := b.resolveCarID(chatID)
+	if err != nil {
+		msg := tgbotapi.NewMessage(chatID, b.carSelectErrorText())
+		b.api.Send(msg)
+		return
+	}
+	text, err := b.handler.HandleBattery(carID)
 	if err != nil {
 		text = fmt.Sprintf("❌ 获取电池健康度失败: %v", err)
 	}
@@ -344,9 +501,14 @@ func (b *Bot) sendBattery(chatID int64) {
 	b.api.Send(msg)
 }
 
-// sendCharge 发送最新充电记录
 func (b *Bot) sendCharge(chatID int64) {
-	text, err := b.handler.HandleCharge()
+	carID, err := b.resolveCarID(chatID)
+	if err != nil {
+		msg := tgbotapi.NewMessage(chatID, b.carSelectErrorText())
+		b.api.Send(msg)
+		return
+	}
+	text, err := b.handler.HandleCharge(carID)
 	if err != nil {
 		text = fmt.Sprintf("❌ 获取充电记录失败: %v", err)
 	}
@@ -355,9 +517,14 @@ func (b *Bot) sendCharge(chatID int64) {
 	b.api.Send(msg)
 }
 
-// sendDrive 发送最近一次驾驶信息
 func (b *Bot) sendDrive(chatID int64) {
-	text, err := b.handler.HandleDrive()
+	carID, err := b.resolveCarID(chatID)
+	if err != nil {
+		msg := tgbotapi.NewMessage(chatID, b.carSelectErrorText())
+		b.api.Send(msg)
+		return
+	}
+	text, err := b.handler.HandleDrive(carID)
 	if err != nil {
 		text = fmt.Sprintf("❌ 获取驾驶信息失败: %v", err)
 	}

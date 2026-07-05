@@ -23,8 +23,11 @@ api_url = "http://localhost:8080"
 # API认证密钥 (Bearer Token)
 api_key = "YOUR_API_KEY_HERE"
 
-# 车辆ID (单车模式，只监控一辆车)
+# 默认车辆 ID（可选，未选车时 fallback；0 表示取 API 列表首车）
 car_id = 1
+
+# 选车状态持久化文件路径
+state_file = "car_state.json"
 
 # 请求超时时间（秒）
 timeout = 30

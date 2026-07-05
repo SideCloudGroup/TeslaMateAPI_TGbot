@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 
 	"teslamate-bot/models"
@@ -27,21 +28,25 @@ func init() {
 	}
 }
 
+const carsCacheTTL = 60 * time.Second
+
 // Client TeslaMate API客户端
 type Client struct {
 	baseURL    string
 	apiKey     string
-	carID      int
 	headers    map[string]string
 	httpClient *fasthttp.Client
+
+	carsMu        sync.RWMutex
+	carsCache     []models.Car
+	carsCacheTime time.Time
 }
 
 // NewClient 创建新的TeslaMate API客户端
-func NewClient(baseURL, apiKey string, carID, timeout int, headers map[string]string) *Client {
+func NewClient(baseURL, apiKey string, timeout int, headers map[string]string) *Client {
 	return &Client{
 		baseURL: baseURL,
 		apiKey:  apiKey,
-		carID:   carID,
 		headers: headers,
 		httpClient: &fasthttp.Client{
 			ReadTimeout:  time.Duration(timeout) * time.Second,
@@ -57,45 +62,76 @@ func (c *Client) doRequest(method, path string) ([]byte, error) {
 	defer fasthttp.ReleaseRequest(req)
 	defer fasthttp.ReleaseResponse(resp)
 
-	// 构建完整URL
 	url := c.baseURL + path
 	req.SetRequestURI(url)
 	req.Header.SetMethod(method)
 
-	// 设置认证头（api_key 为空时不发送）
 	if c.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	// 设置自定义请求头
 	if c.headers != nil {
 		for key, value := range c.headers {
 			req.Header.Set(key, value)
 		}
 	}
 
-	// 执行请求
 	if err := c.httpClient.Do(req, resp); err != nil {
 		return nil, fmt.Errorf("请求失败: %w", err)
 	}
 
-	// 检查状态码
 	statusCode := resp.StatusCode()
 	if statusCode != fasthttp.StatusOK {
 		return nil, fmt.Errorf("API返回错误状态码: %d, 响应: %s", statusCode, string(resp.Body()))
 	}
 
-	// 复制响应体
 	body := make([]byte, len(resp.Body()))
 	copy(body, resp.Body())
 
 	return body, nil
 }
 
+// GetCars 获取车辆列表（带 60s 内存缓存）
+func (c *Client) GetCars() ([]models.Car, error) {
+	c.carsMu.RLock()
+	if c.carsCache != nil && time.Since(c.carsCacheTime) < carsCacheTTL {
+		cars := make([]models.Car, len(c.carsCache))
+		copy(cars, c.carsCache)
+		c.carsMu.RUnlock()
+		return cars, nil
+	}
+	c.carsMu.RUnlock()
+
+	body, err := c.doRequest("GET", "/api/v1/cars")
+	if err != nil {
+		return nil, fmt.Errorf("获取车辆列表失败: %w", err)
+	}
+
+	var response models.CarResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("解析车辆列表失败: %w", err)
+	}
+
+	cars := response.Data.Cars
+	if len(cars) == 0 {
+		return nil, fmt.Errorf("未找到可用车辆")
+	}
+
+	c.carsMu.Lock()
+	c.carsCache = make([]models.Car, len(cars))
+	copy(c.carsCache, cars)
+	c.carsCacheTime = time.Now()
+	c.carsMu.Unlock()
+
+	result := make([]models.Car, len(cars))
+	copy(result, cars)
+	return result, nil
+}
+
 // GetCarDetails 获取车辆详细信息
-func (c *Client) GetCarDetails() (*models.Car, error) {
-	path := fmt.Sprintf("/api/v1/cars/%d", c.carID)
+func (c *Client) GetCarDetails(carID int) (*models.Car, error) {
+	path := fmt.Sprintf("/api/v1/cars/%d", carID)
 	body, err := c.doRequest("GET", path)
 	if err != nil {
 		return nil, fmt.Errorf("获取车辆详情失败: %w", err)
@@ -114,8 +150,8 @@ func (c *Client) GetCarDetails() (*models.Car, error) {
 }
 
 // GetCarStatus 获取车辆当前状态
-func (c *Client) GetCarStatus() (*models.StatusResponse, error) {
-	path := fmt.Sprintf("/api/v1/cars/%d/status", c.carID)
+func (c *Client) GetCarStatus(carID int) (*models.StatusResponse, error) {
+	path := fmt.Sprintf("/api/v1/cars/%d/status", carID)
 	body, err := c.doRequest("GET", path)
 	if err != nil {
 		return nil, fmt.Errorf("获取车辆状态失败: %w", err)
@@ -130,8 +166,8 @@ func (c *Client) GetCarStatus() (*models.StatusResponse, error) {
 }
 
 // GetBatteryHealth 获取电池健康度
-func (c *Client) GetBatteryHealth() (*models.BatteryHealthResponse, error) {
-	path := fmt.Sprintf("/api/v1/cars/%d/battery-health", c.carID)
+func (c *Client) GetBatteryHealth(carID int) (*models.BatteryHealthResponse, error) {
+	path := fmt.Sprintf("/api/v1/cars/%d/battery-health", carID)
 	body, err := c.doRequest("GET", path)
 	if err != nil {
 		return nil, fmt.Errorf("获取电池健康度失败: %w", err)
@@ -146,8 +182,8 @@ func (c *Client) GetBatteryHealth() (*models.BatteryHealthResponse, error) {
 }
 
 // GetLatestCharge 获取最新充电记录
-func (c *Client) GetLatestCharge() (*models.Charge, error) {
-	path := fmt.Sprintf("/api/v1/cars/%d/charges", c.carID)
+func (c *Client) GetLatestCharge(carID int) (*models.Charge, error) {
+	path := fmt.Sprintf("/api/v1/cars/%d/charges", carID)
 	body, err := c.doRequest("GET", path)
 	if err != nil {
 		return nil, fmt.Errorf("获取充电记录失败: %w", err)
@@ -162,14 +198,13 @@ func (c *Client) GetLatestCharge() (*models.Charge, error) {
 		return nil, fmt.Errorf("暂无充电记录")
 	}
 
-	// 返回最新的充电记录（第一条）
 	return &response.Data.Charges[0], nil
 }
 
-func (c *Client) getDrives(startDate, endDate string) (*models.DrivesResponse, error) {
+func (c *Client) getDrives(carID int, startDate, endDate string) (*models.DrivesResponse, error) {
 	path := fmt.Sprintf(
 		"/api/v1/cars/%d/drives?startDate=%s&endDate=%s",
-		c.carID,
+		carID,
 		url.QueryEscape(startDate),
 		url.QueryEscape(endDate),
 	)
@@ -187,10 +222,10 @@ func (c *Client) getDrives(startDate, endDate string) (*models.DrivesResponse, e
 }
 
 // GetLatestDrive 获取最近一次驾驶记录（默认 7 天内最后一条）
-func (c *Client) GetLatestDrive() (*models.Drive, *models.Units, error) {
+func (c *Client) GetLatestDrive(carID int) (*models.Drive, *models.Units, error) {
 	startDate := time.Now().Add(-7 * 24 * time.Hour).UTC().Format(time.RFC3339)
 	endDate := time.Now().UTC().Format(time.RFC3339)
-	response, err := c.getDrives(startDate, endDate)
+	response, err := c.getDrives(carID, startDate, endDate)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -203,13 +238,13 @@ func (c *Client) GetLatestDrive() (*models.Drive, *models.Units, error) {
 }
 
 // GetTodayDriveDistance 返回今日（本地时区）行程总里程与次数
-func (c *Client) GetTodayDriveDistance() (float64, int, *models.Units, error) {
+func (c *Client) GetTodayDriveDistance(carID int) (float64, int, *models.Units, error) {
 	now := time.Now().In(localLoc)
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, localLoc)
 	startDate := startOfDay.Format(time.RFC3339)
 	endDate := now.Format(time.RFC3339)
 
-	response, err := c.getDrives(startDate, endDate)
+	response, err := c.getDrives(carID, startDate, endDate)
 	if err != nil {
 		return 0, 0, nil, err
 	}

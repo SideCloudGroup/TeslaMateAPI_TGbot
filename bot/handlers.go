@@ -38,15 +38,20 @@ func NewHandler(tmClient *client.Client) *Handler {
 }
 
 // HandleStart 处理/start命令
-func (h *Handler) HandleStart() string {
-	return "🚗 欢迎使用Tesla车辆监控Bot\n\n" +
-		"请选择您要查看的信息："
+func (h *Handler) HandleStart(carName string) string {
+	text := "🚗 欢迎使用 Tesla 车辆监控 Bot\n"
+	if carName != "" {
+		text += fmt.Sprintf("当前车辆：%s\n", carName)
+	}
+	text += "\n请选择您要查看的信息："
+	return text
 }
 
 // HandleHelp 处理/help命令
 func (h *Handler) HandleHelp() string {
 	return "📖 可用命令：\n\n" +
 		"/start - 显示主菜单\n" +
+		"/cars - 查看并切换车辆\n" +
 		"/info - 查看车辆详细信息\n" +
 		"/status - 查看车辆当前状态\n" +
 		"/battery - 查看电池健康度\n" +
@@ -55,9 +60,41 @@ func (h *Handler) HandleHelp() string {
 		"/help - 显示帮助信息"
 }
 
+// HandleCars 获取车辆列表及展示文本
+func (h *Handler) HandleCars(selectedID int) (string, []models.Car, error) {
+	cars, err := h.client.GetCars()
+	if err != nil {
+		return "", nil, err
+	}
+
+	var b strings.Builder
+	b.WriteString("🚗 车辆列表\n")
+	b.WriteString("━━━━━━━━━━━━━━━━━━━━\n")
+	for _, car := range cars {
+		marker := "  "
+		if car.CarID == selectedID {
+			marker = "✅"
+		}
+		b.WriteString(fmt.Sprintf("%s %s (Model %s)\n", marker, car.Name, car.CarDetails.Model))
+		b.WriteString(fmt.Sprintf("   ID: %d | 颜色: %s\n", car.CarID, car.CarExterior.ExteriorColor))
+	}
+	b.WriteString("\n请选择要查看的车辆：")
+	return b.String(), cars, nil
+}
+
+// CarDisplayName 根据车辆列表解析显示名称
+func (h *Handler) CarDisplayName(cars []models.Car, carID int) string {
+	for _, car := range cars {
+		if car.CarID == carID {
+			return car.Name
+		}
+	}
+	return fmt.Sprintf("车辆 #%d", carID)
+}
+
 // HandleInfo 处理车辆信息请求
-func (h *Handler) HandleInfo() (string, error) {
-	car, err := h.client.GetCarDetails()
+func (h *Handler) HandleInfo(carID int) (string, error) {
+	car, err := h.client.GetCarDetails(carID)
 	if err != nil {
 		return "", err
 	}
@@ -90,8 +127,8 @@ func (h *Handler) HandleInfo() (string, error) {
 }
 
 // HandleStatus 处理车辆状态请求
-func (h *Handler) HandleStatus() (string, error) {
-	statusResp, err := h.client.GetCarStatus()
+func (h *Handler) HandleStatus(carID int) (string, error) {
+	statusResp, err := h.client.GetCarStatus(carID)
 	if err != nil {
 		return "", err
 	}
@@ -145,7 +182,7 @@ func (h *Handler) HandleStatus() (string, error) {
 	}
 
 	todayDriveLine := ""
-	if todayDistance, todayCount, todayUnits, err := h.client.GetTodayDriveDistance(); err == nil {
+	if todayDistance, todayCount, todayUnits, err := h.client.GetTodayDriveDistance(carID); err == nil {
 		lengthUnit := units.UnitOfLength
 		if todayUnits != nil && todayUnits.UnitOfLength != "" {
 			lengthUnit = todayUnits.UnitOfLength
@@ -200,8 +237,8 @@ func isDriving(status models.CarStatus) bool {
 }
 
 // HandleBattery 处理电池健康度请求
-func (h *Handler) HandleBattery() (string, error) {
-	batteryResp, err := h.client.GetBatteryHealth()
+func (h *Handler) HandleBattery(carID int) (string, error) {
+	batteryResp, err := h.client.GetBatteryHealth(carID)
 	if err != nil {
 		return "", err
 	}
@@ -243,8 +280,8 @@ func (h *Handler) HandleBattery() (string, error) {
 }
 
 // HandleCharge 处理最新充电记录请求
-func (h *Handler) HandleCharge() (string, error) {
-	charge, err := h.client.GetLatestCharge()
+func (h *Handler) HandleCharge(carID int) (string, error) {
+	charge, err := h.client.GetLatestCharge(carID)
 	if err != nil {
 		return "", err
 	}
@@ -280,8 +317,8 @@ func (h *Handler) HandleCharge() (string, error) {
 }
 
 // HandleDrive 处理最近一次驾驶信息请求
-func (h *Handler) HandleDrive() (string, error) {
-	drive, units, err := h.client.GetLatestDrive()
+func (h *Handler) HandleDrive(carID int) (string, error) {
+	drive, units, err := h.client.GetLatestDrive(carID)
 	if err != nil {
 		return "", err
 	}
