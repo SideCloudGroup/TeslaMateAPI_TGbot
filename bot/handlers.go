@@ -130,11 +130,29 @@ func (h *Handler) HandleInfo(carID int) (string, error) {
 func (h *Handler) HandleStatus(carID int) (string, error) {
 	statusResp, err := h.client.GetCarStatus(carID)
 	if err != nil {
-		return "", err
+		carName := ""
+		if car, detailErr := h.client.GetCarDetails(carID); detailErr == nil {
+			carName = car.Name
+		}
+		return h.buildStatusUnavailableText(carID, carName), nil
 	}
 
 	status := statusResp.Data.Status
+	car := statusResp.Data.Car
 	units := statusResp.Data.Units
+
+	if isRealtimeStatusEmpty(status) {
+		carName := status.DisplayName
+		if carName == "" {
+			carName = car.CarName
+		}
+		return h.buildStatusUnavailableText(carID, carName), nil
+	}
+
+	displayName := status.DisplayName
+	if displayName == "" {
+		displayName = car.CarName
+	}
 
 	// 格式化车辆状态
 	stateEmoji := "🔴"
@@ -205,7 +223,7 @@ func (h *Handler) HandleStatus(carID int) (string, error) {
 			"%s"+
 			"📏 里程: %.2f %s\n"+
 			"⏰ 状态更新: %s",
-		status.DisplayName,
+		displayName,
 		status.CarDetails.Model,
 		stateEmoji,
 		status.State,
@@ -226,6 +244,37 @@ func (h *Handler) HandleStatus(carID int) (string, error) {
 		units.UnitOfLength,
 		formatDateTimeLocal(status.StateSince),
 	), nil
+}
+
+func isRealtimeStatusEmpty(status models.CarStatus) bool {
+	if status.State != "" || status.DisplayName != "" {
+		return false
+	}
+	if int(status.BatteryDetails.BatteryLevel) > 0 {
+		return false
+	}
+	if status.ClimateDetails.InsideTemp != 0 || status.ClimateDetails.OutsideTemp != 0 {
+		return false
+	}
+	if status.Odometer > 0 {
+		return false
+	}
+	return true
+}
+
+func (h *Handler) buildStatusUnavailableText(carID int, carName string) string {
+	if carName == "" {
+		carName = fmt.Sprintf("车辆 #%d", carID)
+	}
+	text := fmt.Sprintf("🚗 %s\n━━━━━━━━━━━━━━━━━━━━\n暂无最后状态数据", carName)
+	if todayDistance, todayCount, todayUnits, err := h.client.GetTodayDriveDistance(carID); err == nil && todayCount > 0 {
+		lengthUnit := "km"
+		if todayUnits != nil && todayUnits.UnitOfLength != "" {
+			lengthUnit = todayUnits.UnitOfLength
+		}
+		text += fmt.Sprintf("\n📅 今日行驶: %.2f %s (%d 次)", todayDistance, lengthUnit, todayCount)
+	}
+	return text
 }
 
 func isDriving(status models.CarStatus) bool {
@@ -370,12 +419,18 @@ func (h *Handler) HandleDrive(carID int) (string, error) {
 
 // formatDateTimeLocal 将 API 时间字符串转为本地时区并格式化显示
 func formatDateTimeLocal(datetime string) string {
+	if datetime == "" {
+		return "未知"
+	}
 	t, err := time.Parse(time.RFC3339, datetime)
 	if err != nil {
 		if len(datetime) >= 19 {
 			return datetime[:19]
 		}
 		return datetime
+	}
+	if t.Year() < 2000 {
+		return "未知"
 	}
 	return t.In(localLoc).Format("2006-01-02 15:04:05")
 }

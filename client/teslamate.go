@@ -89,7 +89,24 @@ func (c *Client) doRequest(method, path string) ([]byte, error) {
 	body := make([]byte, len(resp.Body()))
 	copy(body, resp.Body())
 
+	if err := checkAPIError(body); err != nil {
+		return nil, err
+	}
+
 	return body, nil
+}
+
+func checkAPIError(body []byte) error {
+	var errResp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(body, &errResp); err != nil {
+		return nil
+	}
+	if errResp.Error != "" {
+		return fmt.Errorf("API错误: %s", errResp.Error)
+	}
+	return nil
 }
 
 // GetCars 获取车辆列表（带 60s 内存缓存）
