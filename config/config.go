@@ -24,12 +24,11 @@ type TelegramConfig struct {
 
 // TeslaMateConfig TeslaMate API配置
 type TeslaMateConfig struct {
-	APIURL    string            `toml:"api_url"`
-	APIKey    string            `toml:"api_key"`
-	CarID     int               `toml:"car_id"`     // 默认车辆 ID（可选，0 表示无默认）
-	StateFile string            `toml:"state_file"` // 选车状态文件路径
-	Timeout   int               `toml:"timeout"`
-	Headers   map[string]string `toml:"headers"` // 自定义请求头（可选）
+	APIURL  string            `toml:"api_url"`
+	APIKey  string            `toml:"api_key"`
+	CarID   int               `toml:"car_id"` // 默认车辆 ID（可选，0 表示无默认）
+	Timeout int               `toml:"timeout"`
+	Headers map[string]string `toml:"headers"` // 自定义请求头（可选）
 }
 
 // LoadConfig 从文件加载配置
@@ -73,9 +72,6 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("teslamate.api_url 不能为空")
 	}
 	// api_key、car_id 可选；car_id 为 0 时首次使用取 API 列表首车
-	if c.TeslaMate.StateFile == "" {
-		c.TeslaMate.StateFile = "car_state.json"
-	}
 	if c.TeslaMate.Timeout <= 0 {
 		c.TeslaMate.Timeout = 30 // 默认30秒
 	}

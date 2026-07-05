@@ -70,11 +70,11 @@ func main() {
 	)
 	log.Println("TeslaMate API客户端初始化完成")
 
-	carState, err := state.NewCarStateStore(cfg.TeslaMate.StateFile, cfg.TeslaMate.CarID)
+	carState, err := state.NewCarStateStore(cfg.TeslaMate.CarID)
 	if err != nil {
 		log.Fatalf("初始化选车状态失败: %v", err)
 	}
-	log.Printf("选车状态已加载 (文件: %s, 默认车辆: %d)", cfg.TeslaMate.StateFile, cfg.TeslaMate.CarID)
+	log.Printf("选车状态已加载 (文件: %s, 默认车辆: %d)", state.DefaultStatePath, cfg.TeslaMate.CarID)
 
 	tgBot, err := bot.NewBot(
 		cfg.Telegram.BotToken,

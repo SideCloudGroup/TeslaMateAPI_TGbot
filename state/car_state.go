@@ -5,9 +5,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 )
+
+// DefaultStatePath 选车状态文件路径（固定，不可配置）
+const DefaultStatePath = "data/car_state.json"
 
 type fileData struct {
 	Selections map[string]int `json:"selections"`
@@ -22,14 +26,18 @@ type CarStateStore struct {
 }
 
 // NewCarStateStore 加载或创建选车状态文件
-func NewCarStateStore(path string, defaultCarID int) (*CarStateStore, error) {
+func NewCarStateStore(defaultCarID int) (*CarStateStore, error) {
 	s := &CarStateStore{
-		path:      path,
+		path:      DefaultStatePath,
 		byChat:    make(map[int64]int),
 		defaultID: defaultCarID,
 	}
 
-	data, err := os.ReadFile(path)
+	if err := ensureParentDir(s.path); err != nil {
+		return nil, fmt.Errorf("创建选车状态目录失败: %w", err)
+	}
+
+	data, err := os.ReadFile(s.path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return s, s.persist()
@@ -92,7 +100,19 @@ func (s *CarStateStore) persist() error {
 	return s.persistLocked()
 }
 
+func ensureParentDir(path string) error {
+	dir := filepath.Dir(path)
+	if dir == "." || dir == "" {
+		return nil
+	}
+	return os.MkdirAll(dir, 0755)
+}
+
 func (s *CarStateStore) persistLocked() error {
+	if err := ensureParentDir(s.path); err != nil {
+		return fmt.Errorf("创建选车状态目录失败: %w", err)
+	}
+
 	fd := fileData{Selections: make(map[string]int, len(s.byChat))}
 	for chatID, carID := range s.byChat {
 		fd.Selections[strconv.FormatInt(chatID, 10)] = carID

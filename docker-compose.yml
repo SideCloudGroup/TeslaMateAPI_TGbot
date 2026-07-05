@@ -8,4 +8,4 @@ services:
       - TZ=Asia/Shanghai
     volumes:
       - ./config.toml:/app/config.toml:ro
-      - ./data/car_state.json:/app/car_state.json
+      - ./data:/app/data
