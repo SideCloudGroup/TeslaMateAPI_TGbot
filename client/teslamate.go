@@ -30,6 +30,8 @@ func init() {
 
 const carsCacheTTL = 60 * time.Second
 
+const minimumLatestDriveDistanceKM = 0.5
+
 // Client TeslaMate API客户端
 type Client struct {
 	baseURL    string
@@ -238,7 +240,7 @@ func (c *Client) getDrives(carID int, startDate, endDate string) (*models.Drives
 	return &response, nil
 }
 
-// GetLatestDrive 获取最近一次驾驶记录（默认 7 天内最后一条）
+// GetLatestDrive 获取最近一次里程不少于 0.5 km 的驾驶记录（默认查询最近 7 天）
 func (c *Client) GetLatestDrive(carID int) (*models.Drive, *models.Units, error) {
 	startDate := time.Now().Add(-7 * 24 * time.Hour).UTC().Format(time.RFC3339)
 	endDate := time.Now().UTC().Format(time.RFC3339)
@@ -251,7 +253,28 @@ func (c *Client) GetLatestDrive(carID int) (*models.Drive, *models.Units, error)
 		return nil, nil, fmt.Errorf("7天内暂无驾驶记录")
 	}
 
-	return &response.Data.Drives[0], &response.Data.Units, nil
+	drive := latestDriveAtLeast(response.Data.Drives, response.Data.Units.UnitOfLength, minimumLatestDriveDistanceKM)
+	if drive != nil {
+		return drive, &response.Data.Units, nil
+	}
+
+	return nil, nil, fmt.Errorf("7天内暂无里程不少于0.5 km的驾驶记录")
+}
+
+func latestDriveAtLeast(drives []models.Drive, unitOfLength string, minimumDistanceKM float64) *models.Drive {
+	for i := range drives {
+		if driveDistanceInKM(drives[i].OdometerDetails.OdometerDistance, unitOfLength) >= minimumDistanceKM {
+			return &drives[i]
+		}
+	}
+	return nil
+}
+
+func driveDistanceInKM(distance float64, unitOfLength string) float64 {
+	if unitOfLength == "mi" {
+		return distance * 1.609344
+	}
+	return distance
 }
 
 // GetTodayDriveDistance 返回今日（本地时区）行程总里程与次数
