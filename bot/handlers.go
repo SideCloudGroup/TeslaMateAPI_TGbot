@@ -2,6 +2,7 @@ package bot
 
 import (
 	"fmt"
+	"html"
 	"os"
 	"strings"
 	"time"
@@ -172,12 +173,6 @@ func (h *Handler) HandleStatus(carID int) (string, error) {
 		}
 	}
 
-	// 车门/车窗状态
-	doorStatus := "🔒 已锁定"
-	if !status.CarStatusInfo.Locked {
-		doorStatus = "🔓 未锁定"
-	}
-
 	windowStatus := "已关闭"
 	if status.CarStatusInfo.WindowsOpen {
 		windowStatus = "⚠️ 开启"
@@ -193,9 +188,9 @@ func (h *Handler) HandleStatus(carID int) (string, error) {
 		speed := int(status.DrivingDetails.Speed)
 		shift := status.DrivingDetails.ShiftState
 		if shift != "" {
-			speedLine = fmt.Sprintf("🚀 当前速度: %d %s/h (%s)\n", speed, units.UnitOfLength, shift)
+			speedLine = fmt.Sprintf("🚀 当前速度: %d %s/h (%s)\n", speed, html.EscapeString(units.UnitOfLength), html.EscapeString(shift))
 		} else {
-			speedLine = fmt.Sprintf("🚀 当前速度: %d %s/h\n", speed, units.UnitOfLength)
+			speedLine = fmt.Sprintf("🚀 当前速度: %d %s/h\n", speed, html.EscapeString(units.UnitOfLength))
 		}
 	}
 
@@ -205,44 +200,46 @@ func (h *Handler) HandleStatus(carID int) (string, error) {
 		if todayUnits != nil && todayUnits.UnitOfLength != "" {
 			lengthUnit = todayUnits.UnitOfLength
 		}
-		todayDriveLine = fmt.Sprintf("📅 今日行驶: %.2f %s (%d 次)\n", todayDistance, lengthUnit, todayCount)
+		todayDriveLine = fmt.Sprintf("📅 今日行驶: %.2f %s (%d 次)\n", todayDistance, html.EscapeString(lengthUnit), todayCount)
 	}
+
+	diagram := html.EscapeString(buildCarDiagram(status, units))
 
 	return fmt.Sprintf(
 		"🚗 %s (Model %s)\n"+
 			"━━━━━━━━━━━━━━━━━━━━\n"+
 			"%s 车辆状态: %s\n"+
 			"%s"+
+			"<pre>%s</pre>\n"+
 			"🔋 电量: %d%% (%.2f %s)\n"+
 			"🔌 充电: %s\n"+
 			"🌡️ 车内温度: %.1f°%s\n"+
 			"🌡️ 车外温度: %.1f°%s\n"+
-			"%s\n"+
 			"🪟 车窗: %s\n"+
 			"🚨 哨兵模式: %s\n"+
 			"%s"+
 			"📏 里程: %.2f %s\n"+
 			"⏰ 状态更新: %s",
-		displayName,
-		status.CarDetails.Model,
+		html.EscapeString(displayName),
+		html.EscapeString(status.CarDetails.Model),
 		stateEmoji,
-		status.State,
+		html.EscapeString(status.State),
 		speedLine,
+		diagram,
 		status.BatteryDetails.BatteryLevel,
 		status.BatteryDetails.RatedBatteryRange,
-		units.UnitOfLength,
-		chargingStatus,
+		html.EscapeString(units.UnitOfLength),
+		html.EscapeString(chargingStatus),
 		status.ClimateDetails.InsideTemp,
-		units.UnitOfTemperature,
+		html.EscapeString(units.UnitOfTemperature),
 		status.ClimateDetails.OutsideTemp,
-		units.UnitOfTemperature,
-		doorStatus,
+		html.EscapeString(units.UnitOfTemperature),
 		windowStatus,
 		sentryStatus,
 		todayDriveLine,
 		status.Odometer,
-		units.UnitOfLength,
-		formatDateTimeLocal(status.StateSince),
+		html.EscapeString(units.UnitOfLength),
+		html.EscapeString(formatDateTimeLocal(status.StateSince)),
 	), nil
 }
 
@@ -266,13 +263,13 @@ func (h *Handler) buildStatusUnavailableText(carID int, carName string) string {
 	if carName == "" {
 		carName = fmt.Sprintf("车辆 #%d", carID)
 	}
-	text := fmt.Sprintf("🚗 %s\n━━━━━━━━━━━━━━━━━━━━\n暂无最后状态数据", carName)
+	text := fmt.Sprintf("🚗 %s\n━━━━━━━━━━━━━━━━━━━━\n暂无最后状态数据", html.EscapeString(carName))
 	if todayDistance, todayCount, todayUnits, err := h.client.GetTodayDriveDistance(carID); err == nil && todayCount > 0 {
 		lengthUnit := "km"
 		if todayUnits != nil && todayUnits.UnitOfLength != "" {
 			lengthUnit = todayUnits.UnitOfLength
 		}
-		text += fmt.Sprintf("\n📅 今日行驶: %.2f %s (%d 次)", todayDistance, lengthUnit, todayCount)
+		text += fmt.Sprintf("\n📅 今日行驶: %.2f %s (%d 次)", todayDistance, html.EscapeString(lengthUnit), todayCount)
 	}
 	return text
 }

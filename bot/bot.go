@@ -2,6 +2,7 @@ package bot
 
 import (
 	"fmt"
+	"html"
 	"log"
 	"net/http"
 	"net/url"
@@ -414,9 +415,10 @@ func (b *Bot) handleRefresh(chatID int64, messageID int, refreshType string) {
 	case "status":
 		text, err := b.handler.HandleStatus(carID)
 		if err != nil {
-			text = fmt.Sprintf("❌ 获取车辆状态失败: %v", err)
+			text = fmt.Sprintf("❌ 获取车辆状态失败: %s", html.EscapeString(err.Error()))
 		}
 		edit := tgbotapi.NewEditMessageText(chatID, messageID, text)
+		edit.ParseMode = tgbotapi.ModeHTML
 		menu := GetRefreshMenu("status")
 		edit.ReplyMarkup = &menu
 		b.api.Send(edit)
@@ -475,10 +477,10 @@ func (b *Bot) sendStatus(chatID int64, messageID int) {
 	}
 	text, err := b.handler.HandleStatus(carID)
 	if err != nil {
-		text = fmt.Sprintf("❌ 获取车辆状态失败: %v", err)
+		text = fmt.Sprintf("❌ 获取车辆状态失败: %s", html.EscapeString(err.Error()))
 	}
 	menu := GetRefreshMenu("status")
-	b.sendOrEditMessage(chatID, messageID, text, &menu)
+	b.sendOrEditMessageWithParseMode(chatID, messageID, text, &menu, tgbotapi.ModeHTML)
 }
 
 func (b *Bot) sendBattery(chatID int64, messageID int) {
@@ -524,9 +526,16 @@ func (b *Bot) sendDrive(chatID int64, messageID int) {
 }
 
 func (b *Bot) sendOrEditMessage(chatID int64, messageID int, text string, menu *tgbotapi.InlineKeyboardMarkup) {
+	b.sendOrEditMessageWithParseMode(chatID, messageID, text, menu, "")
+}
+
+func (b *Bot) sendOrEditMessageWithParseMode(chatID int64, messageID int, text string, menu *tgbotapi.InlineKeyboardMarkup, parseMode string) {
 	if messageID > 0 {
 		edit := tgbotapi.NewEditMessageText(chatID, messageID, text)
 		edit.ReplyMarkup = menu
+		if parseMode != "" {
+			edit.ParseMode = parseMode
+		}
 		b.api.Send(edit)
 		return
 	}
@@ -534,6 +543,9 @@ func (b *Bot) sendOrEditMessage(chatID int64, messageID int, text string, menu *
 	msg := tgbotapi.NewMessage(chatID, text)
 	if menu != nil {
 		msg.ReplyMarkup = *menu
+	}
+	if parseMode != "" {
+		msg.ParseMode = parseMode
 	}
 	b.api.Send(msg)
 }
