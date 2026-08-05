@@ -93,11 +93,32 @@ func (h *Handler) CarDisplayName(cars []models.Car, carID int) string {
 	return fmt.Sprintf("车辆 #%d", carID)
 }
 
+// maskVIN 对 VIN 打码：保留前 4 位与后 4 位，中间用 * 替换
+func maskVIN(vin string) string {
+	vin = strings.TrimSpace(vin)
+	if vin == "" {
+		return ""
+	}
+	runes := []rune(vin)
+	n := len(runes)
+	if n <= 8 {
+		return strings.Repeat("*", n)
+	}
+	return string(runes[:4]) + strings.Repeat("*", n-8) + string(runes[n-4:])
+}
+
 // HandleInfo 处理车辆信息请求
 func (h *Handler) HandleInfo(carID int) (string, error) {
 	car, err := h.client.GetCarDetails(carID)
 	if err != nil {
 		return "", err
+	}
+
+	version := "未知"
+	if statusResp, statusErr := h.client.GetCarStatus(carID); statusErr == nil {
+		if v := statusResp.Data.Status.CarVersions.Version; v != "" {
+			version = v
+		}
 	}
 
 	return fmt.Sprintf(
@@ -106,6 +127,7 @@ func (h *Handler) HandleInfo(carID int) (string, error) {
 			"🚗 名称: %s\n"+
 			"📱 型号: Model %s %s\n"+
 			"🔢 VIN: %s\n"+
+			"📲 版本: %s\n"+
 			"🎨 颜色: %s\n"+
 			"🛞 轮毂: %s\n"+
 			"📊 效率: %.2f kWh/km\n"+
@@ -117,7 +139,8 @@ func (h *Handler) HandleInfo(carID int) (string, error) {
 		car.Name,
 		car.CarDetails.Model,
 		car.CarDetails.TrimBadging,
-		car.CarDetails.VIN,
+		maskVIN(car.CarDetails.VIN),
+		version,
 		car.CarExterior.ExteriorColor,
 		car.CarExterior.WheelType,
 		car.CarDetails.Efficiency,
