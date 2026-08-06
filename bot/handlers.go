@@ -395,6 +395,11 @@ func (h *Handler) HandleDrive(carID int) (string, error) {
 	startDate, startTime := splitDateTimeLocal(drive.StartDate)
 	endTime := extractTime(drive.EndDate)
 
+	peakInput := drive.PowerMin
+	if peakInput < 0 {
+		peakInput = -peakInput
+	}
+
 	return fmt.Sprintf(
 		"🚗 最近一次驾驶\n"+
 			"━━━━━━━━━━━━━━━━━━━━\n"+
@@ -407,6 +412,7 @@ func (h *Handler) HandleDrive(carID int) (string, error) {
 			"🔋 电量: %d%% → %d%%\n"+
 			"📏 续航: %.0f → %.0f %s\n"+
 			"⚡ 能耗: %.2f kWh (%.0f Wh/%s)\n"+
+			"⚡ 峰值功率: 输出 %.0f kW | 输入 %.0f kW\n"+
 			"🌡️ 车外/车内: %.1f°%s / %.1f°%s\n"+
 			"🚀 最高速度: %.0f %s/h | 平均: %.0f %s/h",
 		startDate,
@@ -426,6 +432,8 @@ func (h *Handler) HandleDrive(carID int) (string, error) {
 		drive.EnergyConsumedNet,
 		drive.ConsumptionNet,
 		units.UnitOfLength,
+		drive.PowerMax,
+		peakInput,
 		drive.OutsideTempAvg,
 		units.UnitOfTemperature,
 		drive.InsideTempAvg,
