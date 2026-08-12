@@ -267,22 +267,53 @@ type ChargesResponse struct {
 
 // Charge 充电记录
 type Charge struct {
-	ChargeID          int                  `json:"charge_id"`
-	StartDate         string               `json:"start_date"`
-	EndDate           string               `json:"end_date"`
-	Address           string               `json:"address"`
-	ChargeEnergyAdded float64              `json:"charge_energy_added"`
-	ChargeEnergyUsed  float64              `json:"charge_energy_used"`
-	Cost              float64              `json:"cost"`
-	DurationMin       int                  `json:"duration_min"`
-	DurationStr       string               `json:"duration_str"`
-	BatteryDetails    ChargeBatteryDetails `json:"battery_details"`
-	RangeIdeal        ChargeRange          `json:"range_ideal"`
-	RangeRated        ChargeRange          `json:"range_rated"`
-	OutsideTempAvg    float64              `json:"outside_temp_avg"`
-	Odometer          float64              `json:"odometer"`
-	Latitude          float64              `json:"latitude"`
-	Longitude         float64              `json:"longitude"`
+	ChargeID          int                   `json:"charge_id"`
+	StartDate         string                `json:"start_date"`
+	EndDate           string                `json:"end_date"`
+	Address           string                `json:"address"`
+	ChargeEnergyAdded float64               `json:"charge_energy_added"`
+	ChargeEnergyUsed  float64               `json:"charge_energy_used"`
+	Cost              float64               `json:"cost"`
+	DurationMin       int                   `json:"duration_min"`
+	DurationStr       string                `json:"duration_str"`
+	BatteryDetails    ChargeBatteryDetails  `json:"battery_details"`
+	RangeIdeal        ChargeRange           `json:"range_ideal"`
+	RangeRated        ChargeRange           `json:"range_rated"`
+	OutsideTempAvg    float64               `json:"outside_temp_avg"`
+	Odometer          float64               `json:"odometer"`
+	Latitude          float64               `json:"latitude"`
+	Longitude         float64               `json:"longitude"`
+	ChargeDetails     []ChargeDetail        `json:"charge_details,omitempty"`
+	ElectricalStats   ChargeElectricalStats `json:"-"`
+}
+
+// ChargeDetailsResponse 单次充电详情响应
+type ChargeDetailsResponse struct {
+	Data struct {
+		Charge Charge `json:"charge"`
+	} `json:"data"`
+}
+
+// ChargeDetail 单次充电过程中的采样数据
+type ChargeDetail struct {
+	ChargerDetails ChargeChargerDetails `json:"charger_details"`
+}
+
+// ChargeChargerDetails 充电器电气参数
+type ChargeChargerDetails struct {
+	ChargerActualCurrent float64 `json:"charger_actual_current"`
+	ChargerPower         float64 `json:"charger_power"`
+	ChargerVoltage       float64 `json:"charger_voltage"`
+}
+
+// ChargeElectricalStats 充电期间非零采样的平均值和最大值
+type ChargeElectricalStats struct {
+	AverageVoltage float64
+	MaximumVoltage float64
+	AverageCurrent float64
+	MaximumCurrent float64
+	AveragePower   float64
+	MaximumPower   float64
 }
 
 // ChargeBatteryDetails 充电电池详情

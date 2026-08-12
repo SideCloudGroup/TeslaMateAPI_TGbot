@@ -202,7 +202,7 @@ func (c *Client) GetBatteryHealth(carID int) (*models.BatteryHealthResponse, err
 
 // GetLatestCharge 获取最新充电记录
 func (c *Client) GetLatestCharge(carID int) (*models.Charge, error) {
-	path := fmt.Sprintf("/api/v1/cars/%d/charges", carID)
+	path := fmt.Sprintf("/api/v1/cars/%d/charges?show=1", carID)
 	body, err := c.doRequest("GET", path)
 	if err != nil {
 		return nil, fmt.Errorf("获取充电记录失败: %w", err)
@@ -217,7 +217,63 @@ func (c *Client) GetLatestCharge(carID int) (*models.Charge, error) {
 		return nil, fmt.Errorf("暂无充电记录")
 	}
 
-	return &response.Data.Charges[0], nil
+	chargeID := response.Data.Charges[0].ChargeID
+	detailPath := fmt.Sprintf("/api/v1/cars/%d/charges/%d", carID, chargeID)
+	detailBody, err := c.doRequest("GET", detailPath)
+	if err != nil {
+		return nil, fmt.Errorf("获取充电详情失败: %w", err)
+	}
+
+	var detailResponse models.ChargeDetailsResponse
+	if err := json.Unmarshal(detailBody, &detailResponse); err != nil {
+		return nil, fmt.Errorf("解析充电详情失败: %w", err)
+	}
+
+	charge := detailResponse.Data.Charge
+	charge.ElectricalStats = summarizeChargeElectricalStats(charge.ChargeDetails)
+	return &charge, nil
+}
+
+func summarizeChargeElectricalStats(details []models.ChargeDetail) models.ChargeElectricalStats {
+	var stats models.ChargeElectricalStats
+	var voltageCount, currentCount, powerCount int
+
+	for _, detail := range details {
+		charger := detail.ChargerDetails
+		if charger.ChargerVoltage > 0 {
+			stats.AverageVoltage += charger.ChargerVoltage
+			voltageCount++
+			if charger.ChargerVoltage > stats.MaximumVoltage {
+				stats.MaximumVoltage = charger.ChargerVoltage
+			}
+		}
+		if charger.ChargerActualCurrent > 0 {
+			stats.AverageCurrent += charger.ChargerActualCurrent
+			currentCount++
+			if charger.ChargerActualCurrent > stats.MaximumCurrent {
+				stats.MaximumCurrent = charger.ChargerActualCurrent
+			}
+		}
+		if charger.ChargerPower > 0 {
+			stats.AveragePower += charger.ChargerPower
+			powerCount++
+			if charger.ChargerPower > stats.MaximumPower {
+				stats.MaximumPower = charger.ChargerPower
+			}
+		}
+	}
+
+	if voltageCount > 0 {
+		stats.AverageVoltage /= float64(voltageCount)
+	}
+	if currentCount > 0 {
+		stats.AverageCurrent /= float64(currentCount)
+	}
+	if powerCount > 0 {
+		stats.AveragePower /= float64(powerCount)
+	}
+
+	return stats
 }
 
 func (c *Client) getDrives(carID int, startDate, endDate string) (*models.DrivesResponse, error) {
