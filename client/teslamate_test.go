@@ -120,3 +120,15 @@ func TestSummarizeChargeElectricalStatsWithNoActiveSamples(t *testing.T) {
 		t.Fatalf("summarizeChargeElectricalStats(nil) = %#v, want zero stats", got)
 	}
 }
+
+func TestSummarizeChargeElectricalStatsDetectsDCCharging(t *testing.T) {
+	details := []models.ChargeDetail{
+		{FastChargerInfo: models.ChargeFastChargerInfo{FastChargerPresent: false}},
+		{FastChargerInfo: models.ChargeFastChargerInfo{FastChargerPresent: true}},
+	}
+
+	got := summarizeChargeElectricalStats(details)
+	if !got.IsDC {
+		t.Fatal("IsDC = false, want true when any sample reports a fast charger")
+	}
+}

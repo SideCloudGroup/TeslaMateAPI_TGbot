@@ -358,6 +358,7 @@ func (h *Handler) HandleCharge(carID int) (string, error) {
 	// 解析日期时间（转为本地时区显示）
 	startDate, startTime := splitDateTimeLocal(charge.StartDate)
 	endTime := extractTime(charge.EndDate)
+	electricalDetails := formatChargeElectricalDetails(charge.ElectricalStats)
 
 	return fmt.Sprintf(
 		"🔌 最新充电记录\n"+
@@ -369,9 +370,7 @@ func (h *Handler) HandleCharge(carID int) (string, error) {
 			"⚡ 充入电量: %.2f kWh\n"+
 			"🔋 电量变化: %d%% → %d%%\n"+
 			"📏 续航增加: %.0f km → %.0f km\n"+
-			"🔌 电压: 平均 %.0f V | 最大 %.0f V\n"+
-			"🔋 电流: 平均 %.1f A | 最大 %.1f A\n"+
-			"⚡ 功率: 平均 %.1f kW | 最大 %.1f kW\n"+
+			"%s"+
 			"💰 费用: ¥%.2f\n"+
 			"🌡️ 平均温度: %.0f°C",
 		startDate,
@@ -383,15 +382,30 @@ func (h *Handler) HandleCharge(carID int) (string, error) {
 		charge.BatteryDetails.EndBatteryLevel,
 		charge.RangeRated.StartRange,
 		charge.RangeRated.EndRange,
-		charge.ElectricalStats.AverageVoltage,
-		charge.ElectricalStats.MaximumVoltage,
-		charge.ElectricalStats.AverageCurrent,
-		charge.ElectricalStats.MaximumCurrent,
-		charge.ElectricalStats.AveragePower,
-		charge.ElectricalStats.MaximumPower,
+		electricalDetails,
 		charge.Cost,
 		charge.OutsideTempAvg,
 	), nil
+}
+
+func formatChargeElectricalDetails(stats models.ChargeElectricalStats) string {
+	details := ""
+	if !stats.IsDC {
+		details = fmt.Sprintf(
+			"🔌 电压: 平均 %.0f V | 最大 %.0f V\n"+
+				"🔋 电流: 平均 %.1f A | 最大 %.1f A\n",
+			stats.AverageVoltage,
+			stats.MaximumVoltage,
+			stats.AverageCurrent,
+			stats.MaximumCurrent,
+		)
+	}
+	details += fmt.Sprintf(
+		"⚡ 功率: 平均 %.1f kW | 最大 %.1f kW\n",
+		stats.AveragePower,
+		stats.MaximumPower,
+	)
+	return details
 }
 
 // HandleDrive 处理最近一次驾驶信息请求

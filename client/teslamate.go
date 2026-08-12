@@ -239,6 +239,9 @@ func summarizeChargeElectricalStats(details []models.ChargeDetail) models.Charge
 	var voltageCount, currentCount, powerCount int
 
 	for _, detail := range details {
+		if detail.FastChargerInfo.FastChargerPresent {
+			stats.IsDC = true
+		}
 		charger := detail.ChargerDetails
 		if charger.ChargerVoltage > 0 {
 			stats.AverageVoltage += charger.ChargerVoltage

@@ -296,7 +296,8 @@ type ChargeDetailsResponse struct {
 
 // ChargeDetail 单次充电过程中的采样数据
 type ChargeDetail struct {
-	ChargerDetails ChargeChargerDetails `json:"charger_details"`
+	ChargerDetails  ChargeChargerDetails  `json:"charger_details"`
+	FastChargerInfo ChargeFastChargerInfo `json:"fast_charger_info"`
 }
 
 // ChargeChargerDetails 充电器电气参数
@@ -306,8 +307,14 @@ type ChargeChargerDetails struct {
 	ChargerVoltage       float64 `json:"charger_voltage"`
 }
 
+// ChargeFastChargerInfo 直流快充标识
+type ChargeFastChargerInfo struct {
+	FastChargerPresent bool `json:"fast_charger_present"`
+}
+
 // ChargeElectricalStats 充电期间非零采样的平均值和最大值
 type ChargeElectricalStats struct {
+	IsDC           bool
 	AverageVoltage float64
 	MaximumVoltage float64
 	AverageCurrent float64
